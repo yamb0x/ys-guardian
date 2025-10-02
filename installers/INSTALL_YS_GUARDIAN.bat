@@ -17,7 +17,7 @@ echo     - NEW: Active Watchers as tab buttons (not checkboxes)
 echo     - NEW: Mute All button to hide all quality checks
 echo     - Modernized Monitoring Controls with clean tab design
 echo     - 4x4 Quick Actions grid with tools:
-echo       * Select Bad Lights / Visibility / Cameras
+echo       * Select Lights / Visibility / Keyframes / Cameras
 echo       * Vibrate Null creation
 echo       * Basic Camera Rig setup
 echo       * Drop to Floor (position objects on ground)

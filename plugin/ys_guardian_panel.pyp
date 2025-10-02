@@ -535,9 +535,9 @@ class StatusArea(gui.GeUserArea):
         super().__init__()
         self.data = {}
         self.show = {"lights": True, "vis": True, "keys": True, "cam": True, "rdc": True}
-        self.pad = 10  # Improved spacing
-        self.rowh = 30  # Height for icon display
-        self.font = c4d.FONT_BOLD
+        self.pad = 3  # Tighter padding for terminal look
+        self.rowh = 24  # Match select button height
+        self.font = c4d.FONT_MONOSPACED  # Terminal-style monospace font
         self.last_draw_time = 0
         self.min_draw_interval = 0.05  # Minimum 50ms between redraws
         self.icons = {}
@@ -590,9 +590,16 @@ class StatusArea(gui.GeUserArea):
             self.last_draw_time = now
 
     def _sev(self, n):
-        if n <= 0:  return ("OK",   c4d.Vector(0.18, 0.65, 0.28))
-        if n < 5:   return ("WARN", c4d.Vector(0.95, 0.72, 0.16))
-        return ("BAD", c4d.Vector(0.85, 0.25, 0.25))
+        # Terminal-style colors - like C4D script manager console
+        # Using darker, more muted colors for terminal aesthetic
+        if n <= 0:
+            # Green for OK - muted terminal green
+            return ("[ OK ]", c4d.Vector(0.15, 0.15, 0.15))  # Dark gray background
+        if n < 5:
+            # Yellow/amber for warnings - terminal amber
+            return ("[WARN]", c4d.Vector(0.25, 0.20, 0.10))  # Dark amber background
+        # Red for errors - terminal red
+        return ("[FAIL]", c4d.Vector(0.25, 0.10, 0.10))  # Dark red background
 
     def _fg(self, bg):
         lum = 0.2126*bg.x + 0.7152*bg.y + 0.0722*bg.z
@@ -603,8 +610,8 @@ class StatusArea(gui.GeUserArea):
             self.OffScreenOn()
             w = self.GetWidth(); h = self.GetHeight()
 
-            # Background
-            self.DrawSetPen(c4d.Vector(0.12,0.12,0.12))
+            # Terminal-style dark background (like C4D script manager)
+            self.DrawSetPen(c4d.Vector(0.08, 0.08, 0.08))
             self.DrawRectangle(0,0,w,h)
 
             try:
@@ -614,129 +621,97 @@ class StatusArea(gui.GeUserArea):
 
             x=self.pad; y=self.pad
 
-            def draw_rounded_rect(x1, y1, x2, y2, radius, color):
-                """Draw a rounded rectangle"""
-                self.DrawSetPen(color)
-                # Convert all coordinates to integers
-                x1, y1, x2, y2, radius = int(x1), int(y1), int(x2), int(y2), int(radius)
-
-                # Draw main rectangle
-                self.DrawRectangle(x1 + radius, y1, x2 - radius, y2)
-                self.DrawRectangle(x1, y1 + radius, x2, y2 - radius)
-
-                # Draw corners (approximate with small rectangles)
-                corner_steps = 4
-                for i in range(corner_steps):
-                    offset = int(radius * (1 - (i / float(corner_steps))))
-                    width = int(radius * (i / float(corner_steps)))
-                    # Top-left
-                    self.DrawRectangle(x1 + offset, y1 + width, x1 + radius, y1 + width + 1)
-                    # Top-right
-                    self.DrawRectangle(x2 - radius, y1 + width, x2 - offset, y1 + width + 1)
-                    # Bottom-left
-                    self.DrawRectangle(x1 + offset, y2 - width - 1, x1 + radius, y2 - width)
-                    # Bottom-right
-                    self.DrawRectangle(x2 - radius, y2 - width - 1, x2 - offset, y2 - width)
-
             def row(label, key, mode="default"):
                 nonlocal y
                 val = int(self.data.get(key, 0))
 
-                # Choose tag + color based on mode
+                # Terminal-style status and message
                 if mode == "lights":
                     if val > 0:
-                        tag_text = f"{val} lights outside lights group"
-                        _, col = self._sev(val)
+                        status = "[FAIL]"
+                        message = f"{val} lights outside lights group"
+                        text_col = c4d.Vector(1, 0.3, 0.3)  # Red text
                     else:
-                        tag_text, col = ("OK", c4d.Vector(0.18,0.65,0.28))
-                elif mode == "keys":
-                    if val > 0:
-                        names = self.data.get("keys_names", [])
-                        first = names[0] if names else "object"
-                        extra = f" (+{val-1} more)" if val > 1 else ""
-                        tag_text = f"MULTIPLE KEYFRAMES ON `{first}`{extra}"
-                        _, col = self._sev(val)
-                    else:
-                        tag_text, col = ("OK", c4d.Vector(0.18,0.65,0.28))
+                        status = "[ OK ]"
+                        message = "All lights properly organized"
+                        text_col = c4d.Vector(0.3, 1, 0.3)  # Green text
                 elif mode == "vis":
                     if val > 0:
+                        status = "[WARN]"
                         names = self.data.get("vis_names", [])
                         first = names[0] if names else "object"
-                        extra = f" (+{val-1} more)" if val > 1 else ""
-                        tag_text = f"MISMATCHED VIEWPORT/RENDER VISIBILITY on `{first}`{extra}"
-                        _, col = self._sev(val)
+                        message = f"Visibility mismatch on '{first}'" + (f" (+{val-1} more)" if val > 1 else "")
+                        text_col = c4d.Vector(1, 1, 0.3)  # Yellow text
                     else:
-                        tag_text, col = ("OK", c4d.Vector(0.18,0.65,0.28))
+                        status = "[ OK ]"
+                        message = "Visibility settings consistent"
+                        text_col = c4d.Vector(0.3, 1, 0.3)  # Green text
+                elif mode == "keys":
+                    if val > 0:
+                        status = "[WARN]"
+                        names = self.data.get("keys_names", [])
+                        first = names[0] if names else "object"
+                        message = f"Multi-axis keys on '{first}'" + (f" (+{val-1} more)" if val > 1 else "")
+                        text_col = c4d.Vector(1, 1, 0.3)  # Yellow text
+                    else:
+                        status = "[ OK ]"
+                        message = "Keyframes properly configured"
+                        text_col = c4d.Vector(0.3, 1, 0.3)  # Green text
                 elif mode == "cam":
                     if val > 0:
-                        tag_text = "ADJUST SHIFT BACK TO 0%! Or update on Discord"
-                        col = c4d.Vector(0.85,0.25,0.25)
+                        status = "[FAIL]"
+                        message = f"{val} camera(s) with non-zero shift"
+                        text_col = c4d.Vector(1, 0.3, 0.3)  # Red text
                     else:
-                        tag_text, col = ("OK", c4d.Vector(0.18,0.65,0.28))
+                        status = "[ OK ]"
+                        message = "Camera shifts at 0%"
+                        text_col = c4d.Vector(0.3, 1, 0.3)  # Green text
                 elif mode == "rdc":
                     if val > 0:
-                        tag_text = "REMOVE ADDITIONAL RENDER PRESET"
-                        col = c4d.Vector(0.85,0.25,0.25)
+                        status = "[FAIL]"
+                        message = f"{val} non-standard render preset(s)"
+                        text_col = c4d.Vector(1, 0.3, 0.3)  # Red text
                     else:
-                        tag_text, col = ("OK", c4d.Vector(0.18,0.65,0.28))
+                        status = "[ OK ]"
+                        message = "Render presets compliant"
+                        text_col = c4d.Vector(0.3, 1, 0.3)  # Green text
                 else:
-                    tag_text, col = self._sev(val)
+                    status = "[ OK ]" if val <= 0 else "[FAIL]"
+                    message = ""
+                    text_col = c4d.Vector(0.3, 1, 0.3) if val <= 0 else c4d.Vector(1, 0.3, 0.3)
 
-                # Draw row background with rounded corners
-                draw_rounded_rect(x, y, w-self.pad, y+self.rowh, 5, col)
+                # Draw terminal-style line with status indicator
+                status_bg, _ = self._sev(val)
 
-                # Prepare text and icon
-                icon_key = None
-                show_icon = (val > 0)  # Only show icon for issues
+                # Draw subtle background stripe
+                self.DrawSetPen(status_bg)
+                self.DrawRectangle(int(x), int(y), int(w-self.pad), int(y+self.rowh))
 
-                if show_icon:
-                    # Determine which icon to use (must match keys in _load_icons)
-                    if mode == "lights":
-                        icon_key = "lights"
-                    elif mode == "vis":
-                        icon_key = "visibility"
-                    elif mode == "keys":
-                        icon_key = "keyframe"
-                    elif mode == "cam":
-                        icon_key = "camera"
-                    elif mode == "rdc":
-                        icon_key = "preset"
+                # Draw terminal-style text
+                self.DrawSetTextCol(text_col, c4d.Vector(0,0,0))
 
-                # Calculate positions
-                text_x = x + 10
-                icon_space = 0
+                # Format: [STATUS] CHECK_NAME: Message
+                check_name = label.ljust(15)
 
-                # Draw icon if available
-                if show_icon and icon_key and icon_key in self.icons:
-                    icon = self.icons[icon_key]
-                    if icon:
-                        icon_w = min(20, icon.GetBw())  # Limit icon size
-                        icon_h = min(20, icon.GetBh())
-                        icon_x = int(x + 8)
-                        icon_y = int(y + (self.rowh - icon_h) // 2)
-                        # Convert all parameters to int
-                        self.DrawBitmap(icon, int(icon_x), int(icon_y), int(icon_w), int(icon_h),
-                                      0, 0, int(icon.GetBw()), int(icon.GetBh()), c4d.BMP_ALLOWALPHA)
-                        icon_space = icon_w + 5
-                        text_x = int(icon_x + icon_space)
+                # Draw status
+                self.DrawText(status, int(x+5), int(y+6))
 
-                # Draw text (format depends on if there's an issue)
-                self.DrawSetTextCol(self._fg(col), col)
-                if val > 0:
-                    # Issue found - show detailed message
-                    self.DrawText(f"{label}: {val}  [{tag_text}]", int(text_x), int(y+8))
-                else:
-                    # No issue - just show OK
-                    self.DrawText(f"{label}: {val}  [OK]", int(text_x), int(y+8))
+                # Draw check name
+                self.DrawSetTextCol(c4d.Vector(0.5, 0.5, 0.5), c4d.Vector(0,0,0))  # Gray for label
+                self.DrawText(f"{check_name}:", int(x+55), int(y+6))
+
+                # Draw message
+                self.DrawSetTextCol(text_col, c4d.Vector(0,0,0))
+                self.DrawText(message, int(x+175), int(y+6))
 
                 y += self.rowh + self.pad
 
             mapping = [
-                ("Lights outside lights group", "lights", "lights"),
-                ("Visibility traps", "vis", "vis"),
-                ("Keyframe sanity hits", "keys", "keys"),
-                ("Cameras with non-zero Shift", "cam", "cam"),
-                ("Render preset conflicts", "rdc", "rdc"),
+                ("LIGHTS", "lights", "lights"),
+                ("VISIBILITY", "vis", "vis"),
+                ("KEYFRAMES", "keys", "keys"),
+                ("CAMERAS", "cam", "cam"),
+                ("RENDER_PRESETS", "rdc", "rdc"),
             ]
 
             for label, key, mode in mapping:
@@ -744,43 +719,13 @@ class StatusArea(gui.GeUserArea):
                     row(label, key, mode)
 
             y += 6
-            # Make footer text look clickable with blue color
-            self.DrawSetTextCol(c4d.Vector(0.5, 0.7, 1.0), c4d.Vector(0,0,0))  # Light blue for link
-            # Store footer text position for click detection
-            self.footer_text = "YAMBO STUDIO © 2025  YS GUARDIAN  V1.0  [GitHub]"
-            self.footer_x = int(x+6)
-            self.footer_y = int(h-18)
-            self.footer_w = 280  # Approximate width
-            self.footer_h = 15   # Approximate height
-            self.DrawText(self.footer_text, self.footer_x, self.footer_y)
+            # Footer text with simplified format (GitHub button will be separate)
+            self.DrawSetTextCol(c4d.Vector(0.6, 0.6, 0.6), c4d.Vector(0,0,0))  # Gray color for footer
+            footer_text = "YAMBO STUDIO © 2025  YS GUARDIAN  V1.0"
+            self.DrawText(footer_text, int(x+6), int(h-18))
 
         except Exception as e:
             safe_print(f"Error in DrawMsg: {e}")
-
-    def Message(self, msg, result):
-        """Handle user input messages including mouse clicks"""
-        # Handle mouse clicks
-        if msg.GetId() == c4d.BFM_INPUT:
-            device = msg.GetLong(c4d.BFM_INPUT_DEVICE)
-            channel = msg.GetLong(c4d.BFM_INPUT_CHANNEL)
-
-            # Check for left mouse button click
-            if device == c4d.BFM_INPUT_MOUSE and channel == c4d.BFM_INPUT_MOUSELEFT:
-                # Get mouse position
-                mx = msg.GetLong(c4d.BFM_INPUT_X)
-                my = msg.GetLong(c4d.BFM_INPUT_Y)
-
-                # Check if click is on footer text
-                if hasattr(self, 'footer_x') and hasattr(self, 'footer_y'):
-                    if (self.footer_x <= mx <= self.footer_x + self.footer_w and
-                        self.footer_y - self.footer_h <= my <= self.footer_y + 5):
-                        # Open GitHub repository
-                        import webbrowser
-                        webbrowser.open("https://github.com/yamb0x/ys-guardian")
-                        safe_print("Opening YS Guardian GitHub repository...")
-                        return True
-
-        return gui.GeDialog.Message(self, msg, result)
 
 # ---------------- Snapshot Handler ----------------
 class SnapshotHandler:
@@ -884,15 +829,30 @@ class G:
     SHOW_C = 1016
     SHOW_P = 1017  # Show Preset conflicts
 
-    SEL_LIGHTS = 1101
-    SEL_VIS = 1103
-    SEL_KEYS = 1104
-    SEL_CAMS = 1105
+    # Placeholder buttons (future features)
+    BTN_A = 1101
+    BTN_B = 1103
+    BTN_C = 1104
+    BTN_D = 1105
+
+    # Status text fields for quality checks
+    STATUS_LIGHTS = 1105
+    STATUS_VIS = 1106
+    STATUS_KEYS = 1107
+    STATUS_CAMS = 1108
+    STATUS_PRESET = 1109
+
+    # Select buttons for quality checks (in status area)
+    SEL_LIGHTS = 1110
+    SEL_VIS = 1111
+    SEL_KEYS = 1112
+    SEL_CAMS = 1113
+    SEL_PRESET = 1114
 
     # New Quick Action buttons
-    BTN_VIBRATE_NULL = 1106
-    BTN_CAM_RIG = 1107
-    BTN_DROP_TO_FLOOR = 1108  # Drop to Floor functionality
+    BTN_VIBRATE_NULL = 1120
+    BTN_CAM_RIG = 1121
+    BTN_DROP_TO_FLOOR = 1122  # Drop to Floor functionality
     BTN_PLACEHOLDER = 1109  # Fourth button placeholder
 
     # Render preset tab buttons
@@ -913,12 +873,16 @@ class G:
     # Monitoring control buttons
     BTN_MUTE_ALL = 1305
 
+    # GitHub link button
+    BTN_GITHUB = 1306
+
 class YSPanel(gui.GeDialog):
     def __init__(self):
         super().__init__()
         self._last_doc = None
         self._last_check_time = 0
         self._check_thread = None
+        self.ua = None  # StatusArea will be created in CreateLayout
         self._thread_lock = threading.Lock()
         self._pending_results = None
         self._artist_name = ""
@@ -928,6 +892,7 @@ class YSPanel(gui.GeDialog):
         self._vis_bad = []
         self._keys_bad = []
         self._cam_bad = []
+        self._preset_bad = []
 
     # ---- read scene -> UI
     def _sync_from_doc(self, doc):
@@ -1047,25 +1012,40 @@ class YSPanel(gui.GeDialog):
             cam_bad = check_camera_shift(doc)
             rdc_bad = check_render_conflicts(doc)
 
-            # Update UI
+            # Update visual status area
+            lights_count = len(lights_bad) if lights_bad else 0
+            vis_count = len(vis_bad) if vis_bad else 0
+            keys_count = len(keys_bad) if keys_bad else 0
+            cam_count = len(cam_bad) if cam_bad else 0
+            rdc_count = int(rdc_bad) if rdc_bad else 0
+
+            # Update StatusArea visual display
             self.ua.set_state(
                 dict(
-                    lights=len(lights_bad) if lights_bad else 0,
-                    vis=len(vis_bad) if vis_bad else 0,
+                    lights=lights_count,
+                    vis=vis_count,
                     vis_names=[(o.GetName() or "object") for o in (vis_bad[:10] if vis_bad else [])],
-                    keys=len(keys_bad) if keys_bad else 0,
+                    keys=keys_count,
                     keys_names=[(o.GetName() or "object") for o in (keys_bad[:10] if keys_bad else [])],
-                    cam=len(cam_bad) if cam_bad else 0,
-                    rdc=int(rdc_bad) if rdc_bad else 0,
+                    cam=cam_count,
+                    rdc=rdc_count,
                 ),
                 self._flags(),
             )
+
+            # Enable/disable select buttons based on issues
+            self.Enable(G.SEL_LIGHTS, lights_count > 0)
+            self.Enable(G.SEL_VIS, vis_count > 0)
+            self.Enable(G.SEL_KEYS, keys_count > 0)
+            self.Enable(G.SEL_CAMS, cam_count > 0)
+            self.Enable(G.SEL_PRESET, rdc_count > 0)
 
             # Store results for selection
             self._lights_bad = lights_bad
             self._vis_bad = vis_bad
             self._keys_bad = keys_bad
             self._cam_bad = cam_bad
+            self._preset_bad = []  # For render presets, we don't track specific objects
 
         except Exception as e:
             safe_print(f"Error during refresh: {e}")
@@ -1087,8 +1067,15 @@ class YSPanel(gui.GeDialog):
         self.AddEditText(G.SHOT, c4d.BFH_SCALEFIT, 200,0)
         self.GroupEnd()
 
-        # Render Preset tabs and Force buttons
+        # Artist row (moved below Shot ID)
         self.AddSeparatorH(5)
+        self.GroupBegin(12, c4d.BFH_SCALEFIT, 2, 0)
+        self.AddStaticText(0,0,80,0,"Artist:",0)
+        self.AddEditText(G.ARTIST, c4d.BFH_SCALEFIT, 0,0)
+        self.GroupEnd()
+
+        # Render Preset tabs and Force buttons
+        self.AddSeparatorH(8)
         self.GroupBegin(13, c4d.BFH_SCALEFIT, 1, 0)
         self.AddStaticText(0,0,0,0,"Render Preset:",0)
         self.GroupBegin(14, c4d.BFH_SCALEFIT, 6, 0)
@@ -1102,31 +1089,35 @@ class YSPanel(gui.GeDialog):
         self.GroupEnd()
         self.GroupEnd()
 
-        # Artist row
-        self.AddSeparatorH(8)
-        self.GroupBegin(12, c4d.BFH_SCALEFIT, 2, 0)
-        self.AddStaticText(0,0,80,0,"Artist:",0)
-        self.AddEditText(G.ARTIST, c4d.BFH_SCALEFIT, 0,0)
         self.GroupEnd()
 
-        self.GroupEnd()
+        # Add separator after Render Presets section
+        self.AddSeparatorH(8)
 
         # Monitoring controls section - modernized
         self.AddSeparatorH(12)
         self.GroupBegin(20, c4d.BFH_SCALEFIT, 1, 0)
         self.AddStaticText(0,0,0,0,"Monitoring Controls",0)
+        self.AddSeparatorH(5)  # Add separator after title
 
-        # Update rate and mute controls
-        self.GroupBegin(21, c4d.BFH_SCALEFIT, 4, 0)
-        self.AddStaticText(0,0,80,0,"Update Rate:",0)
-        self.AddEditNumberArrows(G.STEP,0,60,0)
-        self.AddStaticText(0,0,50,0,"x 100ms",0)
-        self.AddButton(G.BTN_MUTE_ALL, c4d.BFH_SCALEFIT, 0, 0, "Mute All")
+        # Update rate and mute controls - cleaner layout with more spacing
+        self.GroupBegin(21, c4d.BFH_SCALEFIT, 2, 0)
+        # Left side - Update rate controls with wider spacing
+        self.GroupBegin(211, c4d.BFH_LEFT, 3, 0)
+        self.AddStaticText(0,0,100,0,"Update Rate:",0)  # Increased width
+        self.AddEditNumberArrows(G.STEP,0,50,0)
+        self.AddStaticText(0,0,70,0,"x 100ms",0)  # Increased width
+        self.GroupEnd()
+        # Right side - Mute button
+        self.GroupBegin(212, c4d.BFH_RIGHT, 1, 0)
+        self.AddButton(G.BTN_MUTE_ALL, c4d.BFH_RIGHT, 60, 0, "Mute")
+        self.GroupEnd()
         self.GroupEnd()
 
         # Active watchers as tabs
         self.AddSeparatorH(5)
-        self.AddStaticText(0,0,0,0,"Active Watchers:",0)
+        self.AddStaticText(0,0,0,0,"Enable/Disable Watchers:",0)  # Changed text
+        self.AddSeparatorH(5)  # Add separator after title
         self.GroupBegin(35, c4d.BFH_SCALEFIT, 5, 0)
         self.AddButton(G.BTN_WATCH_LIGHTS, c4d.BFH_SCALEFIT, 0, 0, "Lights")
         self.AddButton(G.BTN_WATCH_VIS, c4d.BFH_SCALEFIT, 0, 0, "Visibility")
@@ -1137,14 +1128,29 @@ class YSPanel(gui.GeDialog):
 
         self.GroupEnd()
 
-        # Status area (visual watcher)
+        # Status area (visual watcher with colors and icons)
         self.AddSeparatorH(12)
-        self.GroupBegin(40, c4d.BFH_SCALEFIT|c4d.BFV_SCALEFIT, 1, 0)
+        self.GroupBegin(40, c4d.BFH_SCALEFIT, 1, 0)
         self.AddStaticText(0,0,0,0,"Quality Check Status",0)
         self.AddSeparatorH(5)
-        self.AddUserArea(G.CANVAS, c4d.BFH_SCALEFIT|c4d.BFV_SCALEFIT, 0, 200)
+
+        # Visual status area with terminal-style display
+        self.GroupBegin(406, c4d.BFH_SCALEFIT, 2, 0)
+        self.AddUserArea(G.CANVAS, c4d.BFH_SCALEFIT|c4d.BFV_SCALEFIT, 0, 135)  # Adjusted height for 5 checks
         self.ua = StatusArea()
         self.AttachUserArea(self.ua, G.CANVAS)
+
+        # Buttons column on the right
+        self.GroupBegin(407, c4d.BFH_RIGHT|c4d.BFV_TOP, 1, 0)
+        self.AddButton(G.SEL_LIGHTS, c4d.BFH_RIGHT, 60, 0, "Select")
+        self.AddButton(G.SEL_VIS, c4d.BFH_RIGHT, 60, 0, "Select")
+        self.AddButton(G.SEL_KEYS, c4d.BFH_RIGHT, 60, 0, "Select")
+        self.AddButton(G.SEL_CAMS, c4d.BFH_RIGHT, 60, 0, "Select")
+        self.AddButton(G.SEL_PRESET, c4d.BFH_RIGHT, 60, 0, "Info")
+        self.GroupEnd()
+
+        self.GroupEnd()
+
         self.GroupEnd()
 
         # Quick Actions - 4x4 grid
@@ -1153,12 +1159,12 @@ class YSPanel(gui.GeDialog):
         self.AddStaticText(0,0,0,0,"Quick Actions",0)
         self.AddSeparatorH(5)
 
-        # First row - Selection buttons
+        # First row - Workflow automation buttons
         self.GroupBegin(51, c4d.BFH_SCALEFIT, 4, 0)
-        self.AddButton(G.SEL_LIGHTS,c4d.BFH_SCALEFIT,0,0,"Select Bad Lights")
-        self.AddButton(G.SEL_VIS,c4d.BFH_SCALEFIT,0,0,"Select Bad Visibility")
-        self.AddButton(G.SEL_KEYS,c4d.BFH_SCALEFIT,0,0,"Select Keyframe Issues")
-        self.AddButton(G.SEL_CAMS,c4d.BFH_SCALEFIT,0,0,"Select Bad Cameras")
+        self.AddButton(G.BTN_A,c4d.BFH_SCALEFIT,0,0,"Hierarchy→Layers")
+        self.AddButton(G.BTN_B,c4d.BFH_SCALEFIT,0,0,"Solo Layers")
+        self.AddButton(G.BTN_C,c4d.BFH_SCALEFIT,0,0,"Search 3D Model")
+        self.AddButton(G.BTN_D,c4d.BFH_SCALEFIT,0,0,"Ask ChatGPT")
         self.GroupEnd()
 
         # Second row - Additional tools
@@ -1181,6 +1187,12 @@ class YSPanel(gui.GeDialog):
         self.GroupBorderSpace(5, 5, 5, 5)
         self.AddButton(G.BTN_OPEN_FOLDER, c4d.BFH_SCALEFIT, 0, 0, "Open Your Stills Folder")
         self.AddButton(G.BTN_SNAPSHOT, c4d.BFH_SCALEFIT, 0, 0, "Save Still")
+        self.GroupEnd()
+
+        # Add GitHub button with link icon (↗)
+        self.AddSeparatorH(8)
+        self.GroupBegin(62, c4d.BFH_SCALEFIT, 1, 0)
+        self.AddButton(G.BTN_GITHUB, c4d.BFH_SCALEFIT, 0, 0, "View on GitHub ↗")
         self.GroupEnd()
 
         self.GroupEnd()
@@ -1307,33 +1319,55 @@ class YSPanel(gui.GeDialog):
         elif cid == G.BTN_DROP_TO_FLOOR:
             self._drop_to_floor(doc)
 
+        elif cid == G.BTN_A:
+            self._hierarchy_to_layers(doc)
+
+        elif cid == G.BTN_B:
+            self._solo_layers(doc)
+
+        elif cid == G.BTN_C:
+            self._search_3d_model()
+
+        elif cid == G.BTN_D:
+            self._ask_chatgpt()
+
+        elif cid == G.BTN_GITHUB:
+            # Open GitHub repository
+            import webbrowser
+            github_url = "https://github.com/yamb0x/ys-guardian"
+            webbrowser.open(github_url)
+            safe_print(f"Opening GitHub repository: {github_url}")
+
         elif cid == G.SEL_LIGHTS:
-            if hasattr(self, '_lights_bad'):
+            if hasattr(self, '_lights_bad') and self._lights_bad:
                 _select_objects(doc, self._lights_bad)
                 safe_print(f"Selected {len(self._lights_bad)} problematic lights")
             else:
-                safe_print("No light issues found")
+                c4d.gui.MessageDialog("No light issues found to select")
 
         elif cid == G.SEL_VIS:
-            if hasattr(self, '_vis_bad'):
+            if hasattr(self, '_vis_bad') and self._vis_bad:
                 _select_objects(doc, self._vis_bad)
                 safe_print(f"Selected {len(self._vis_bad)} visibility issues")
             else:
-                safe_print("No visibility issues found")
+                c4d.gui.MessageDialog("No visibility issues found to select")
 
         elif cid == G.SEL_KEYS:
-            if hasattr(self, '_keys_bad'):
+            if hasattr(self, '_keys_bad') and self._keys_bad:
                 _select_objects(doc, self._keys_bad)
                 safe_print(f"Selected {len(self._keys_bad)} keyframe issues")
             else:
-                safe_print("No keyframe issues found")
+                c4d.gui.MessageDialog("No keyframe issues found to select")
 
         elif cid == G.SEL_CAMS:
-            if hasattr(self, '_cam_bad'):
+            if hasattr(self, '_cam_bad') and self._cam_bad:
                 _select_objects(doc, self._cam_bad)
                 safe_print(f"Selected {len(self._cam_bad)} camera shift issues")
             else:
-                safe_print("No camera shift issues found")
+                c4d.gui.MessageDialog("No camera shift issues found to select")
+
+        elif cid == G.SEL_PRESET:
+            c4d.gui.MessageDialog("Please ensure only standard render presets exist:\n- previz\n- pre_render\n- render\n- stills")
 
         elif cid == G.STEP:
             # Update timer interval
@@ -1546,6 +1580,441 @@ class YSPanel(gui.GeDialog):
 
         safe_print("Created basic camera rig")
 
+    def _hierarchy_to_layers(self, doc):
+        """Link main project nulls and their children to layers with matching names"""
+        if not doc:
+            return
+
+        safe_print("Starting Hierarchy to Layers sync...")
+
+        # Check for objects outside nulls first
+        root_objects = []
+        orphan_objects = []
+
+        obj = doc.GetFirstObject()
+        while obj:
+            # Only consider top-level objects
+            if obj.GetUp() is None:
+                if obj.GetType() == c4d.Onull:
+                    root_objects.append(obj)
+                else:
+                    # Check if it's a camera or light (they might be allowed outside)
+                    obj_type = obj.GetType()
+                    if obj_type not in [c4d.Ocamera, c4d.Olight]:
+                        orphan_objects.append(obj)
+            obj = obj.GetNext()
+
+        # If there are orphan objects, show error
+        if orphan_objects:
+            orphan_names = [obj.GetName() for obj in orphan_objects[:5]]  # Show first 5
+            more = f" and {len(orphan_objects)-5} more" if len(orphan_objects) > 5 else ""
+
+            msg = f"Found {len(orphan_objects)} object(s) outside of null groups:\n"
+            msg += "\n".join(orphan_names) + more
+            msg += "\n\nPlease organize all objects into null groups first."
+            c4d.gui.MessageDialog(msg)
+            safe_print(f"Aborted: {len(orphan_objects)} objects found outside null groups")
+            return
+
+        # No orphans, proceed with layer sync
+        if not root_objects:
+            c4d.gui.MessageDialog("No null groups found in the scene.")
+            return
+
+        # Start undo
+        doc.StartUndo()
+
+        # Get or create layer root
+        layer_root = doc.GetLayerObjectRoot()
+        if not layer_root:
+            safe_print("Error: Could not get layer root")
+            doc.EndUndo()
+            return
+
+        created_layers = 0
+        updated_layers = 0
+
+        for null in root_objects:
+            null_name = null.GetName()
+
+            # Find or create layer with matching name (returns layer and is_new flag)
+            layer, is_new = self._find_or_create_layer(doc, layer_root, null_name)
+
+            if layer:
+                # Assign null and all children to this layer
+                self._assign_to_layer_recursive(doc, null, layer)
+
+                if is_new:
+                    created_layers += 1
+                    safe_print(f"Created new layer '{null_name}' and synced objects")
+                else:
+                    updated_layers += 1
+                    safe_print(f"Updated existing layer '{null_name}' with objects")
+
+        doc.EndUndo()
+        c4d.EventAdd()
+
+        # Just report to console, no popup
+        safe_print(f"Hierarchy→Layers complete: {created_layers} new, {updated_layers} updated layers, {len(root_objects)} nulls synced")
+
+    def _find_or_create_layer(self, doc, layer_root, name):
+        """Find existing layer by name or create new one. Returns (layer, is_new)"""
+        # First, search for existing layer
+        layer = layer_root.GetDown()
+        while layer:
+            if layer.GetName() == name:
+                return layer, False  # Found existing
+            layer = layer.GetNext()
+
+        # Create new layer
+        new_layer = c4d.documents.LayerObject()
+        new_layer.SetName(name)
+        new_layer.InsertUnder(layer_root)
+
+        # Set a color for the layer (optional - makes it easier to see)
+        # Use different colors for common group names
+        colors = {
+            "lights": c4d.Vector(1, 1, 0),      # Yellow
+            "cameras": c4d.Vector(0, 1, 1),     # Cyan
+            "environment": c4d.Vector(0, 1, 0),  # Green
+            "models": c4d.Vector(0.5, 0.5, 1),  # Light blue
+            "animation": c4d.Vector(1, 0.5, 0), # Orange
+        }
+
+        # Check if name contains any of our keywords
+        lower_name = name.lower()
+        for key, color in colors.items():
+            if key in lower_name:
+                new_layer[c4d.ID_LAYER_COLOR] = color
+                break
+        else:
+            # Default color if no keyword match
+            new_layer[c4d.ID_LAYER_COLOR] = c4d.Vector(0.7, 0.7, 0.7)
+
+        doc.AddUndo(c4d.UNDOTYPE_NEW, new_layer)
+        return new_layer, True  # Return new layer and flag
+
+    def _solo_layers(self, doc):
+        """Solo selected layers - disable all other layers and their objects"""
+        if not doc:
+            return
+
+        # Check if any layers are currently disabled (solo is active)
+        # If so, restore all layers
+        layer_root = doc.GetLayerObjectRoot()
+        if not layer_root:
+            safe_print("Error: Could not get layer root")
+            return
+
+        # Check if we're in solo mode
+        def check_solo_mode(layer):
+            """Check if any layer is disabled (indicating solo mode)"""
+            while layer:
+                if not layer[c4d.ID_LAYER_VIEW]:
+                    return True
+                child = layer.GetDown()
+                if child and check_solo_mode(child):
+                    return True
+                layer = layer.GetNext()
+            return False
+
+        first_layer = layer_root.GetDown()
+        if first_layer and check_solo_mode(first_layer):
+            # We're in solo mode, restore all
+            self._unsolo_layers(doc)
+            return
+
+        # Get all selected layers
+        selected_layers = []
+
+        def collect_selected_layers(layer):
+            """Recursively collect selected layers"""
+            while layer:
+                if layer.GetBit(c4d.BIT_ACTIVE):
+                    selected_layers.append(layer)
+                # Check children
+                child = layer.GetDown()
+                if child:
+                    collect_selected_layers(child)
+                layer = layer.GetNext()
+
+        # Start from first layer
+        first_layer = layer_root.GetDown()
+        if not first_layer:
+            c4d.gui.MessageDialog("No layers found in the scene.\nCreate layers first using Hierarchy→Layers.")
+            return
+
+        collect_selected_layers(first_layer)
+
+        if not selected_layers:
+            c4d.gui.MessageDialog("Please select one or more layers to solo.")
+            return
+
+        safe_print(f"Solo mode: Isolating {len(selected_layers)} layer(s)")
+
+        # Start undo
+        doc.StartUndo()
+
+        # Track what we're doing
+        layers_disabled = 0
+        layers_soloed = 0
+        objects_affected = 0
+
+        # First pass: Process all layers
+        def process_layer(layer, is_soloed):
+            """Process a layer and return count of affected objects"""
+            nonlocal layers_disabled, layers_soloed
+
+            doc.AddUndo(c4d.UNDOTYPE_CHANGE, layer)
+
+            if is_soloed:
+                # Enable this layer
+                layer[c4d.ID_LAYER_VIEW] = True
+                layer[c4d.ID_LAYER_RENDER] = True
+                layer[c4d.ID_LAYER_MANAGER] = True
+                layer[c4d.ID_LAYER_GENERATORS] = True
+                layer[c4d.ID_LAYER_DEFORMERS] = True
+                layer[c4d.ID_LAYER_EXPRESSIONS] = True  # This controls XPresso
+                layer[c4d.ID_LAYER_ANIMATION] = True
+                layer[c4d.ID_LAYER_LOCKED] = False
+                # Try XPresso specific flag if it exists
+                if hasattr(c4d, 'ID_LAYER_XPRESSO'):
+                    layer[c4d.ID_LAYER_XPRESSO] = True
+                layers_soloed += 1
+                safe_print(f"  Enabled layer: {layer.GetName()}")
+            else:
+                # Disable this layer completely
+                layer[c4d.ID_LAYER_VIEW] = False
+                layer[c4d.ID_LAYER_RENDER] = False
+                layer[c4d.ID_LAYER_MANAGER] = False
+                layer[c4d.ID_LAYER_GENERATORS] = False
+                layer[c4d.ID_LAYER_DEFORMERS] = False
+                layer[c4d.ID_LAYER_EXPRESSIONS] = False  # This controls XPresso
+                layer[c4d.ID_LAYER_ANIMATION] = False
+                # Try XPresso specific flag if it exists
+                if hasattr(c4d, 'ID_LAYER_XPRESSO'):
+                    layer[c4d.ID_LAYER_XPRESSO] = False
+                layers_disabled += 1
+
+        # Process all layers
+        def process_all_layers(layer):
+            while layer:
+                is_selected = layer in selected_layers
+                process_layer(layer, is_selected)
+
+                # Process children
+                child = layer.GetDown()
+                if child:
+                    process_all_layers(child)
+
+                layer = layer.GetNext()
+
+        process_all_layers(first_layer)
+
+        # Second pass: Handle objects without layers (disable them too)
+        def disable_unassigned_objects(obj):
+            """Disable objects not assigned to any layer"""
+            nonlocal objects_affected
+
+            while obj:
+                # Check if object has no layer assignment
+                if not obj.GetLayerObject(doc):
+                    doc.AddUndo(c4d.UNDOTYPE_CHANGE, obj)
+
+                    # Disable the object
+                    obj[c4d.ID_BASEOBJECT_VISIBILITY_EDITOR] = 1  # Hide in editor
+                    obj[c4d.ID_BASEOBJECT_VISIBILITY_RENDER] = 1  # Hide in render
+
+                    # Disable generators and deformers
+                    obj.SetDeformMode(False)
+
+                    # If it's a generator, try to disable it
+                    if obj.GetType() in [c4d.Oarray, c4d.Osymmetry, c4d.Oboole, c4d.Oinstance]:
+                        obj[c4d.ID_BASEOBJECT_GENERATOR_FLAG] = False
+
+                    objects_affected += 1
+
+                # Process children
+                child = obj.GetDown()
+                if child:
+                    disable_unassigned_objects(child)
+
+                obj = obj.GetNext()
+
+        # Disable unassigned objects
+        first_object = doc.GetFirstObject()
+        if first_object:
+            disable_unassigned_objects(first_object)
+
+        doc.EndUndo()
+        c4d.EventAdd()
+
+        # Report to console
+        safe_print(f"Solo Layers complete: {layers_soloed} soloed, {layers_disabled} disabled, {objects_affected} unassigned objects hidden")
+
+    def _unsolo_layers(self, doc):
+        """Restore all layers to their default visible state"""
+        if not doc:
+            return
+
+        safe_print("Restoring all layers...")
+
+        # Get layer root
+        layer_root = doc.GetLayerObjectRoot()
+        if not layer_root:
+            return
+
+        doc.StartUndo()
+
+        layers_restored = 0
+
+        def restore_layer(layer):
+            """Restore a layer to default visible state"""
+            nonlocal layers_restored
+
+            while layer:
+                doc.AddUndo(c4d.UNDOTYPE_CHANGE, layer)
+
+                # Enable everything
+                layer[c4d.ID_LAYER_VIEW] = True
+                layer[c4d.ID_LAYER_RENDER] = True
+                layer[c4d.ID_LAYER_MANAGER] = True
+                layer[c4d.ID_LAYER_GENERATORS] = True
+                layer[c4d.ID_LAYER_DEFORMERS] = True
+                layer[c4d.ID_LAYER_EXPRESSIONS] = True  # This controls XPresso
+                layer[c4d.ID_LAYER_ANIMATION] = True
+                layer[c4d.ID_LAYER_LOCKED] = False
+                # Try XPresso specific flag if it exists
+                if hasattr(c4d, 'ID_LAYER_XPRESSO'):
+                    layer[c4d.ID_LAYER_XPRESSO] = True
+
+                layers_restored += 1
+
+                # Process children
+                child = layer.GetDown()
+                if child:
+                    restore_layer(child)
+
+                layer = layer.GetNext()
+
+        # Restore all layers
+        first_layer = layer_root.GetDown()
+        if first_layer:
+            restore_layer(first_layer)
+
+        # Restore objects without layers
+        def restore_unassigned_objects(obj):
+            while obj:
+                if not obj.GetLayerObject(doc):
+                    doc.AddUndo(c4d.UNDOTYPE_CHANGE, obj)
+                    obj[c4d.ID_BASEOBJECT_VISIBILITY_EDITOR] = 2  # Show
+                    obj[c4d.ID_BASEOBJECT_VISIBILITY_RENDER] = 2  # Show
+                    obj.SetDeformMode(True)
+                    if obj.GetType() in [c4d.Oarray, c4d.Osymmetry, c4d.Oboole, c4d.Oinstance]:
+                        obj[c4d.ID_BASEOBJECT_GENERATOR_FLAG] = True
+
+                child = obj.GetDown()
+                if child:
+                    restore_unassigned_objects(child)
+
+                obj = obj.GetNext()
+
+        first_object = doc.GetFirstObject()
+        if first_object:
+            restore_unassigned_objects(first_object)
+
+        doc.EndUndo()
+        c4d.EventAdd()
+
+        safe_print(f"Restored {layers_restored} layers to visible state")
+
+    def _search_3d_model(self):
+        """Open 3dsky.org search with user's query"""
+        # Ask user what they're looking for with a fun message
+        search_term = c4d.gui.InputDialog("Which 3D model you need bro?", "")
+
+        if search_term:
+            # Clean up the search term for URL
+            import urllib.parse
+            encoded_term = urllib.parse.quote(search_term)
+
+            # Construct 3dsky search URL
+            search_url = f"https://3dsky.org/3dmodels?query={encoded_term}"
+
+            # Open in browser
+            import webbrowser
+            webbrowser.open(search_url)
+
+            safe_print(f"Opening 3dsky search for: {search_term}")
+        else:
+            safe_print("Search cancelled - no search term entered")
+
+    def _ask_chatgpt(self):
+        """Open ChatGPT with user's question copied to clipboard"""
+        # Ask user for their prompt
+        user_prompt = c4d.gui.InputDialog("What Python Tag script do you want to create?", "")
+
+        if user_prompt:
+            # Construct the full prompt with role and instructions
+            full_prompt = """Role: You are a senior Technical Director and Python developer specializing in Cinema 4D Python Tags. You write production-safe code that creates and manages User Data in a single Python-Tag script. Your outputs must be robust, idempotent (no duplicate UD), and well-commented.
+
+IMPORTANT: The plugin is designed for Cinema 4D 2024. Follow the correct documentation only and do not assume c4d commands and IDs. Use only verified Cinema 4D 2024 API calls.
+
+Rules for Cinema4D scripting help:
+
+Always clarify if the user wants a Python Tag vs a Python Generator vs a Command Script vs a Plugin.
+
+Remember:
+- Python Tags cannot permanently add objects, only return one object or change attributes.
+- Python Generators are used when the goal is to create many children/geometry procedurally.
+- For UI-driven tools (buttons, UD), a Script or Command Plugin is often more appropriate.
+- Always explain which object type is correct before coding.
+
+Workflow you must follow (two phases):
+
+Plan first (no code): Outline the tag's behavior, schema (names, data types, default values, constraints), data flow, and how you'll avoid common C4D pitfalls. Confirm whether a Python Tag is the right choice or if a Python Generator would be better.
+
+Then code: Output one complete Python-Tag script (no placeholders, no omissions) ready to paste into a Python Tag. The scripts should generate user data on the null on which the python tag is applied.
+
+The user data controls should be sliders, buttons, dropdowns and anything needed for a clear and smart workflow to generate complex 3D scenes.
+
+The script I am interested to build is: """ + user_prompt
+
+            # Copy full prompt to clipboard
+            c4d.CopyStringToClipboard(full_prompt)
+
+            # Open ChatGPT
+            import webbrowser
+            webbrowser.open("https://chatgpt.com/")
+
+            # Show reminder message
+            c4d.gui.MessageDialog(
+                "Your Python Tag prompt has been copied to clipboard!\n\n"
+                "Just press Ctrl+V (or Cmd+V on Mac) in ChatGPT to paste it.\n\n"
+                "ChatGPT will help you create a production-ready Python Tag script."
+            )
+
+            safe_print(f"Opened ChatGPT with Python Tag request: {user_prompt[:50]}...")
+        else:
+            safe_print("ChatGPT cancelled - no script description entered")
+
+    def _assign_to_layer_recursive(self, doc, obj, layer):
+        """Assign object and all its children to a layer"""
+        if not obj or not layer:
+            return
+
+        # Add undo for the object
+        doc.AddUndo(c4d.UNDOTYPE_CHANGE, obj)
+
+        # Assign to layer
+        obj.SetLayerObject(layer)
+
+        # Process all children recursively
+        child = obj.GetDown()
+        while child:
+            self._assign_to_layer_recursive(doc, child, layer)
+            child = child.GetNext()
+
     def _drop_to_floor(self, doc):
         """Drop selected objects to floor (Y=0 plane)"""
         if not doc:
@@ -1636,12 +2105,12 @@ class YSPanel(gui.GeDialog):
         """Show comprehensive plugin info and system checks"""
         info = []
         info.append("YS GUARDIAN v1.0 - PLUGIN INFO")
-        info.append("-" * 40)
+        info.append("")
         info.append("")
 
         # System checks section
         info.append("SYSTEM CHECKS:")
-        info.append("-" * 30)
+        info.append("")
 
         # Check snapshot system availability
         if SNAPSHOT_AVAILABLE:
@@ -1659,7 +2128,7 @@ class YSPanel(gui.GeDialog):
         # Check Python dependencies
         info.append("")
         info.append("PYTHON DEPENDENCIES:")
-        info.append("-" * 30)
+        info.append("")
 
         # Check OpenEXR
         try:
@@ -1689,7 +2158,7 @@ class YSPanel(gui.GeDialog):
         # Check directories
         info.append("")
         info.append("DIRECTORIES:")
-        info.append("-" * 30)
+        info.append("")
 
         rs_dir = r"C:\cache\rs snapshots"
         if os.path.exists(rs_dir):
@@ -1712,7 +2181,7 @@ class YSPanel(gui.GeDialog):
         # Important notes section
         info.append("")
         info.append("IMPORTANT NOTES:")
-        info.append("-" * 30)
+        info.append("")
         info.append("1. BEFORE SAVING STILL:")
         info.append("   - Take a snapshot in Redshift RenderView first")
         info.append("   - The plugin saves the LATEST snapshot as PNG")
