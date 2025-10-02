@@ -37,8 +37,10 @@ REM Get the project root directory (parent of installers folder)
 set PROJECT_ROOT=%~dp0..
 set PLUGIN_DIR=%PROJECT_ROOT%\plugin
 set ICONS_DIR=%PROJECT_ROOT%\icons
+set C4D_DIR=%PROJECT_ROOT%\c4d
 set DEST_DIR=C:\Program Files\Maxon Cinema 4D 2024\plugins\YS_Guardian
 set DEST_ICONS_DIR=%DEST_DIR%\icons
+set DEST_C4D_DIR=%DEST_DIR%\c4d
 
 REM Check if running as administrator
 net session >nul 2>&1
@@ -134,14 +136,12 @@ echo Step 3a: Installing C4D asset files...
 echo ----------------------------------------
 
 REM Create c4d directory in destination
-set DEST_C4D_DIR=%DEST_DIR%\c4d
 if not exist "%DEST_C4D_DIR%" (
     mkdir "%DEST_C4D_DIR%"
     echo [OK] Created c4d directory
 )
 
 REM Copy C4D asset files
-set C4D_DIR=%SCRIPT_DIR%\..\c4d
 if exist "%C4D_DIR%\VibrateNull.c4d" (
     copy /Y "%C4D_DIR%\VibrateNull.c4d" "%DEST_C4D_DIR%\VibrateNull.c4d" >nul
     if %errorlevel% equ 0 (
@@ -151,6 +151,7 @@ if exist "%C4D_DIR%\VibrateNull.c4d" (
     )
 ) else (
     echo [WARNING] VibrateNull.c4d not found in c4d folder
+    echo          Expected: %C4D_DIR%\VibrateNull.c4d
 )
 
 echo.
