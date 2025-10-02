@@ -1326,8 +1326,8 @@ class YSPanel(gui.GeDialog):
             return
 
         try:
-            # Get path to the C4D file
-            plugin_dir = os.path.dirname(os.path.dirname(__file__))
+            # Get path to the C4D file (in the same plugin directory)
+            plugin_dir = os.path.dirname(__file__)
             c4d_file = os.path.join(plugin_dir, "c4d", "VibrateNull.c4d")
 
             # Check if file exists
