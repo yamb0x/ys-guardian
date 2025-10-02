@@ -6,6 +6,7 @@ import json
 import time
 import subprocess
 import sys
+import webbrowser
 from pathlib import Path
 from datetime import datetime
 import threading
@@ -743,11 +744,43 @@ class StatusArea(gui.GeUserArea):
                     row(label, key, mode)
 
             y += 6
-            self.DrawSetTextCol(c4d.Vector(0.8,0.8,0.8), c4d.Vector(0,0,0))
-            self.DrawText("YAMBO STUDIO © 2025  STUDIO TOOLS  V.2.2", int(x+6), int(h-18))
+            # Make footer text look clickable with blue color
+            self.DrawSetTextCol(c4d.Vector(0.5, 0.7, 1.0), c4d.Vector(0,0,0))  # Light blue for link
+            # Store footer text position for click detection
+            self.footer_text = "YAMBO STUDIO © 2025  YS GUARDIAN  V1.0  [GitHub]"
+            self.footer_x = int(x+6)
+            self.footer_y = int(h-18)
+            self.footer_w = 280  # Approximate width
+            self.footer_h = 15   # Approximate height
+            self.DrawText(self.footer_text, self.footer_x, self.footer_y)
 
         except Exception as e:
             safe_print(f"Error in DrawMsg: {e}")
+
+    def Message(self, msg, result):
+        """Handle user input messages including mouse clicks"""
+        # Handle mouse clicks
+        if msg.GetId() == c4d.BFM_INPUT:
+            device = msg.GetLong(c4d.BFM_INPUT_DEVICE)
+            channel = msg.GetLong(c4d.BFM_INPUT_CHANNEL)
+
+            # Check for left mouse button click
+            if device == c4d.BFM_INPUT_MOUSE and channel == c4d.BFM_INPUT_MOUSELEFT:
+                # Get mouse position
+                mx = msg.GetLong(c4d.BFM_INPUT_X)
+                my = msg.GetLong(c4d.BFM_INPUT_Y)
+
+                # Check if click is on footer text
+                if hasattr(self, 'footer_x') and hasattr(self, 'footer_y'):
+                    if (self.footer_x <= mx <= self.footer_x + self.footer_w and
+                        self.footer_y - self.footer_h <= my <= self.footer_y + 5):
+                        # Open GitHub repository
+                        import webbrowser
+                        webbrowser.open("https://github.com/yamb0x/ys-guardian")
+                        safe_print("Opening YS Guardian GitHub repository...")
+                        return True
+
+        return gui.GeDialog.Message(self, msg, result)
 
 # ---------------- Snapshot Handler ----------------
 class SnapshotHandler:
