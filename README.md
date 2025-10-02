@@ -1,269 +1,221 @@
-# YS Guardian v1.0 - C4D Production Assistant
+# YS Guardian
 
-**Yambo Studio pipeline assistant and automation toolkit for C4D (2024 + RS 2025)**
+YS Guardian is a production quality control plugin for Cinema 4D that monitors scenes in real-time for common pipeline issues and provides workflow automation tools for professional 3D production environments.
 
-## 🎯 Overview
-YS Guardian is a pipeline verification control tool that acts as a real-time watchdog for Cinema 4D daily workflow. It continuously monitors your scene for common 3D pipeline issues, automates repetitive tasks, provide and ensures consistency across team projects.
+**Key features:** Real-time quality monitoring · Render preset management · Artist tracking · Workflow automation tools
 
-## ✨ Features
+![YS Guardian Interface](https://github.com/user-attachments/assets/847c6930-f54c-4f7f-86e2-5308f9e0e7bd)
 
-### 🔍 Real-Time Quality Monitoring
-The plugin performs **5 critical quality checks** with visual status indicators:
+## Quality Monitoring
 
-- **🔦 Lights Organization** - Detects lights not properly organized in "lights" or "lighting" groups
-- **👁 Visibility Consistency** - Catches viewport/render visibility mismatches that cause render surprises
-- **🔑 Keyframe Sanity** - Warns about multi-axis keyframes that can cause animation issues
-- **📷 Camera Shift Detection** - Alerts when cameras have non-zero shift values
-- **📋 Render Preset Validation** - Ensures only approved presets exist (previz, pre_render, render, stills)
+YS Guardian performs continuous scene validation across five critical production areas:
 
-Each check displays:
-- Visual icon indicator
-- Count of issues found
-- Color-coded status bars with rounded corners
+| Check | Purpose | Detection |
+|-------|---------|-----------|
+| **Lights Organization** | Ensures proper scene hierarchy | Identifies lights outside designated groups |
+| **Visibility Consistency** | Prevents render surprises | Detects viewport/render visibility mismatches |
+| **Keyframe Validation** | Maintains animation integrity | Flags multi-axis position/rotation keyframes |
+| **Camera Shift Detection** | Ensures proper framing | Alerts on non-zero camera shift values |
+| **Render Preset Compliance** | Standardizes output settings | Validates against approved preset names |
+
+Each check provides:
+- Terminal-style status display with color coding
+- Issue count and detailed messages
 - One-click selection of problematic objects
+- Real-time updates with configurable intervals
 
-### 🎬 Production Management
+## Render Management
 
-#### Shot & Artist Tracking
-- **Shot ID Management** - Syncs with Cinema 4D's Take system for consistent naming (change the 'Main' take that define the output path)
-- **Artist Name Persistence** - Saves per computer/user for stills folder m
-- **Organized Output Structure** - Creates dated folders per artist (output/stills/YYMMDD)
+### Preset System
+Fast switching between standardized render configurations with automatic output path management:
 
-#### Render Preset System
-- **Quick Preset Switching** - One-click tabs for previz, pre_render, render, and stills
-- **Force Settings** - Apply standardized resolution/framerate per preset
-- **Force Vertical** - Instantly convert all presets to 9:16 for social media (Reels/Stories)
-- **Visual Active Preset** - Shows which preset is currently active
+- **Previz**: 1280×720 @ 25fps → `output/previz/_Shots/$take/`
+- **Pre-Render**: 1920×1080 @ 25fps → `output/pre_render/_Shots/$take/v01/`
+- **Render**: 1920×1080 @ 25fps → `output/render/_Shots/$take/v01/`
+- **Stills**: 3840×2160 @ 25fps → `output/stills/_Shots/$take/v01/`
 
-### 🛠 Quick Actions Toolbar
-**8 powerful tools in a 4x2 grid layout:**
+**Force Settings**: Apply standard resolutions and framerates to all presets
+**Force Vertical**: Convert all presets to 9:16 aspect ratio (720×1280, 1080×1920, 2160×3840) for social media delivery
 
-**Row 1 - Selection Tools:**
-- **Select Bad Lights** - Select all lights outside proper groups
-- **Select Bad Visibility** - Select objects with visibility issues
-- **Select Keyframe Issues** - Select objects with multi-axis keyframes
-- **Select Bad Cameras** - Select cameras with shift problems
+### Shot Tracking
+- Syncs with Cinema 4D's Take system
+- Shot ID automatically updates from Main Take name
+- Output paths use Take-based naming for organized rendering
 
-**Row 2 - Creation Tools:**
-- **Vibrate Null** - Creates null with randomized vibration expression
-- **Basic Cam Rig** - Creates camera with null parent for easy animation
-- **Drop to Floor** - Instantly position selected objects on ground plane (Y=0)
-- **Plugin Info** - Displays detailed status and troubleshooting info
+## Workflow Automation
 
-### 🎯 Drop to Floor Feature
-The Drop to Floor tool provides instant object grounding with professional accuracy:
-- **Smart Bounding Box Calculation** - Correctly handles rotated and scaled objects
-- **World Space Precision** - Calculates true lowest point regardless of object orientation
-- **Batch Processing** - Drop multiple selected objects in one click
-- **Silent Operation** - No popup interruptions for smooth workflow
-- **Full Undo Support** - Complete undo/redo integration
-- **Console Feedback** - Status messages in console only
+### Layer Management
+**Hierarchy→Layers**: Automatically creates layer structure from scene hierarchy
+- Scans top-level null objects in Object Manager
+- Creates or updates matching layers in Layer Manager
+- Assigns nulls and all children to corresponding layers
+- Validates scene organization (rejects objects outside null groups)
+- Applies color coding for common group types (lights, cameras, environment)
 
-#### How It Works:
-1. Select one or more objects
-2. Click "Drop to Floor" button
-3. Objects instantly position with their bottom at Y=0
-4. Works correctly with rotated, scaled, and grouped objects
-5. Nulls and empty objects use default 50-unit radius
+**Solo Layers**: Layer isolation workflow
+- Solo selected layers (hide all others)
+- Click again to restore all layers
+- Disables unassigned objects during solo mode
+- Full undo support for all layer operations
 
-### 📸 Stills Management
-- **Save Still** - Captures RenderView snapshots (EXR format)
-- **Automatic Conversion** - Converts EXR to PNG with HDR tone mapping
-- **Organized Storage** - `Output/ArtistName/YYMMDD/scenename.png`
-- **Open Folder** - Quick access to your stills folder
+### Scene Tools
+**Vibrate Null**: Merges pre-configured null with vibration expression
+**Basic Cam Rig**: Creates camera with null parent for animation control
+**Drop to Floor**: Positions selected objects at Y=0 using accurate bounding box calculation
+- Handles rotated, scaled, and grouped objects correctly
+- Batch processing for multiple selections
+- Silent operation with console feedback only
 
-### 🎛 Monitoring Controls
-- **Live Monitoring Toggle** - Enable/disable real-time quality checking
-- **Update Rate Control** - Adjustable check interval (100-5000ms)
-- **Active Watchers Tabs** - Individual toggle for each quality check
-- **Mute All** - Temporarily disable all checks without losing settings
+### External Integration
+**Search 3D Model**: Quick access to 3dsky.org library search
+**Ask ChatGPT**: Opens ChatGPT with pre-formatted prompt for Cinema 4D Python Tag scripts
+- Includes technical director role definition
+- Cinema 4D 2024 API specifications
+- Production-safe code requirements
 
-## 📦 Installation
+## Stills Management
 
-### Prerequisites
-- **Cinema 4D 2024** or later
-- **Redshift 3D** renderer (for snapshot features)
-- **Python 3.x** with packages: `Pillow`, `OpenEXR`, `numpy` (for EXR conversion)
+**Save Still**: Captures and converts Redshift RenderView snapshots
+- Locates latest EXR in Redshift cache directory
+- Converts to PNG with filmic tone mapping
+- Saves to organized artist/date folder structure: `Output/[Artist]/YYMMDD/scene_HHMMSS.png`
+- Displays image in Picture Viewer with resolution and aspect ratio info
 
-### One-Click Installation
-1. Navigate to `installers/` folder
-2. Right-click `INSTALL_YS_GUARDIAN.bat` → **Run as Administrator**
-3. Follow the prompts
-4. Restart Cinema 4D
+**Open Folder**: Direct access to artist's dated output directory
+
+**Requirements**: Redshift must save snapshots as EXR format (not .rssnap2)
+
+## Monitoring Controls
+
+- **Update Rate**: Configurable check interval (100-5000ms)
+- **Watcher Toggles**: Enable/disable individual quality checks
+- **Mute All**: Temporarily suspend all checks
+- **Live Status**: Terminal-style display with color-coded status messages
+
+## Installation
+
+### Requirements
+- Cinema 4D 2024 or later
+- Redshift 3D (for snapshot features)
+- Python 3.x with `OpenEXR` and `Pillow` packages (for EXR conversion)
+
+### Automated Installation
+```bash
+# Navigate to installers directory
+cd installers
+
+# Run installation script as Administrator
+INSTALL_YS_GUARDIAN.bat
+```
+
+Restart Cinema 4D after installation completes.
 
 ### Manual Installation
-Copy the following to `C:\Program Files\Maxon Cinema 4D 2024\plugins\YS_Guardian\`:
+Copy plugin files to Cinema 4D plugins directory:
 ```
-plugin/
-├── ys_guardian_panel.pyp          # Main plugin file
-├── redshift_snapshot_manager_fixed.py
-├── exr_to_png_converter_simple.py
-└── exr_converter_external.py
-icons/                              # All UI icons
+C:\Program Files\Maxon Cinema 4D 2024\plugins\YS_Guardian\
+├── plugin\
+│   └── ys_guardian_panel.pyp
+├── icons\
+│   └── [status and toggle icons]
+└── c4d\
+    └── VibrateNull.c4d
 ```
-
-## 🚀 Usage
-
-### Opening the Panel
-**Extensions → YS Guardian** and dock it in your cinema4d layout
-
-### Initial Setup
-1. **Enter Artist Name** - Automatically saved per computer
-2. **Configure Monitoring** - Enable/disable specific quality checks
-3. **Set Update Rate** - Default 1000ms (10 x 100ms)
-4. **Configure Redshift** - Set snapshot format to EXR
-
-### Daily Workflow
-
-#### Quality Monitoring
-- **Green Status** = All clear ✅
-- **Orange/Red Status** = Issues detected with count
-- **Click Status Bar** = Select problematic objects
-- **Toggle Watchers** = Focus on specific checks
-
-#### Preset Management
-1. Click preset tabs to switch render settings
-2. Use "Force Settings" to standardize resolutions
-3. Use "Force Vertical" for social media format
-
-#### Taking Stills
-1. Render in Redshift RenderView
-2. Click "Save Still" in YS Guardian
-3. Find organized PNG in your dated folder
-
-### Output Structure
-```
-Project_Folder/
-└── Output/
-    └── [Artist_Name]/
-        └── [YYMMDD]/
-            ├── scene1_143022.png  (14:30:22)
-            ├── scene1_144511.png  (14:45:11)
-            └── scene1_151203.png  (15:12:03)
-```
-
-## 🔧 Advanced Features
-
-### Render Preset Standards
-
-| Preset | Resolution | FPS | Purpose |
-|--------|------------|-----|---------|
-| **previz** | 1280×720 | 25 | Quick previews, animatics |
-| **pre_render** | 1920×1080 | 25 | Client reviews, WIP |
-| **render** | 1920×1080 | 25 | Final delivery |
-| **stills** | 3840×2160 | 25 | High-res stills |
-
-**Vertical Mode (9:16):**
-| Preset | Resolution | Platform |
-|--------|------------|----------|
-| **previz** | 720×1280 | Stories/Reels test |
-| **pre_render** | 1080×1920 | Instagram/TikTok |
-| **render** | 1080×1920 | Final vertical |
-| **stills** | 2160×3840 | 4K vertical |
-
-### Performance Optimization
-- **Smart Caching** - Results cached for 500ms
-- **Chunked Processing** - Max 1000 objects per check
-- **Early Exit** - Stops after 50 issues found
-- **Render Pause** - Automatically pauses during renders
-
-## ⚠️ Troubleshooting
-
-### Common Issues & Solutions
-
-| Issue | Solution |
-|-------|----------|
-| **Quality checks not updating** | Enable "Live Monitoring", check update rate |
-| **Can't select problematic objects** | Click the status bar, not the icon |
-| **Snapshot conversion fails** | Run `installers/external_converter_setup.bat` |
-| **Plugin not showing** | Restart C4D after installation |
-| **Preset not switching** | Ensure preset exists with exact name |
-
-### Redshift Snapshot Setup
-1. **Redshift RenderView** → **Options** → **Snapshot Settings**
-2. Set format to **EXR** (not .rssnap2)
-3. Set path to `C:\cache\rs snapshots\`
-4. Enable "Auto-increment filename"
 
 ### Python Dependencies
 ```bash
-# Install required packages
-pip install Pillow OpenEXR numpy
-
-# Verify installation
-python -c "import PIL, OpenEXR, numpy; print('All packages installed')"
+pip install OpenEXR-Python Pillow numpy
 ```
 
-## 👥 Team Deployment
+## Usage
 
-### For IT/Pipeline
-1. Clone repository to network location
-2. Modify `INSTALL_YS_GUARDIAN.bat` for your paths
-3. Deploy via Group Policy or login script
-4. Set environment variable: `YS_GUARDIAN_OUTPUT`
+### Setup
+1. Open panel: **Extensions → YS Guardian**
+2. Enter artist name (saved per computer)
+3. Set monitoring update rate (default: 1000ms)
+4. Configure Redshift to save snapshots as EXR format
 
-### For Artists
-1. Get the `ys_guardian` folder from Pipeline
-2. Run `installers/INSTALL_YS_GUARDIAN.bat` as Admin
-3. Restart Cinema 4D
-4. Find under Extensions menu
-
-## 📊 Technical Specifications
-
-### System Requirements
-- **OS**: Windows 10/11
-- **Cinema 4D**: 2024.0.0 or later
-- **Python**: 3.7+ (for EXR conversion)
-- **RAM**: Minimal impact (~50MB)
-- **CPU**: <1% usage during monitoring
-
-### File Structure
+### Quality Monitoring Workflow
+The status display uses terminal-style formatting:
 ```
-ys_guardian/
-├── plugin/
-│   ├── ys_guardian_panel.pyp         # Main plugin (58KB)
-│   ├── redshift_snapshot_manager.py  # Snapshot handler
-│   └── exr_converter_external.py     # EXR→PNG converter
-├── icons/
-│   ├── lights_outside_icon.tif       # Status icons
-│   ├── visibility_trap_icon.tif
-│   └── [other status icons]
-├── installers/
-│   └── INSTALL_YS_GUARDIAN.bat       # One-click installer
-└── README.md                          # This file
+[FAIL] LIGHTS        : 3 lights outside lights group
+[WARN] VISIBILITY    : Visibility mismatch on 'RS Spot Light.1'
+[ OK ] KEYFRAMES     : Keyframes properly configured
+[ OK ] CAMERAS       : Camera shifts at 0%
+[ OK ] RENDER_PRESETS: Render presets compliant
 ```
+
+Click **Select** buttons to select problematic objects for correction.
+
+### Layer Workflow
+1. Organize scene into top-level null groups
+2. Click **Hierarchy→Layers** to create matching layer structure
+3. Use **Solo Layers** to isolate specific layers during work
+4. Click **Solo Layers** again to restore full scene visibility
+
+### Stills Capture
+```
+1. Render preview in Redshift RenderView
+2. Take snapshot (Redshift saves to cache as EXR)
+3. Click "Save Still" in YS Guardian
+4. PNG output: Output/[Artist]/YYMMDD/scene_HHMMSS.png
+```
+
+## Technical Details
+
+### Performance Optimization
+- **Smart Caching**: Results cached for 500ms to reduce scene traversal
+- **Chunked Processing**: Maximum 1000 objects per check cycle
+- **Early Exit**: Stops after 50 issues detected per check
+- **Throttled Updates**: Minimum 50ms between UI redraws
+- **Render Detection**: Automatically pauses monitoring during active renders
 
 ### Data Persistence
 
-| Data Type | Storage Location | Persistence |
-|-----------|-----------------|-------------|
-| **Artist Name** | `%AppData%/MAXON/prefs/ys_guardian_settings.json` | Per computer |
-| **Window Position** | Cinema 4D layout | Per workspace |
-| **Shot ID** | Scene Take system | Per document |
-| **Render Preset** | Active render data | Per document |
-| **Monitor State** | Runtime only | Per session |
+| Data | Storage Location | Scope |
+|------|-----------------|-------|
+| Artist Name | `%AppData%/MAXON/prefs/ys_guardian_settings.json` | Per computer |
+| Window Layout | Cinema 4D layout system | Per workspace |
+| Shot ID | Take system (Main Take name) | Per document |
+| Active Preset | Render data settings | Per document |
+| Monitor State | Runtime only | Per session |
 
-## 📝 Version History
+## Troubleshooting
 
-- **v1.0** (Current) - Initial release with complete feature set:
-  - 5 real-time quality checks with visual indicators
-  - 8 quick action tools in grid layout
-  - Render preset management with Force Vertical
-  - Stills management with EXR conversion
-  - Artist tracking and Shot ID synchronization
-  - Performance optimization with smart caching
+### Common Issues
 
-## 🤝 Contributing
+**Quality checks not updating**
+- Verify "Live Monitoring" is enabled
+- Check update rate setting (minimum 100ms)
+- Ensure watchers are not muted
 
-This is an internal Yambo Studio tool. For feature requests or bug reports:
-1. Contact the Pipeline team
-2. Check `CLAUDE.md` for development guidelines
-3. Test changes in sandbox environment first
+**Snapshot conversion fails**
+- Verify Redshift saves snapshots as EXR (not .rssnap2)
+- Check Python dependencies: `pip install OpenEXR-Python Pillow`
+- Verify cache directory exists: `C:\cache\rs snapshots\`
 
-## 📄 License
+**Layer sync errors**
+- Ensure all objects are organized in top-level null groups
+- Check that nulls have unique names
+- Verify no orphan objects exist outside nulls
 
-**Internal Use Only** - Yambo Studio Proprietary Tool
-Not for distribution outside the organization
+**Preset switching not working**
+- Confirm preset exists with exact lowercase name
+- Check render data list for duplicate presets
+- Use "Force Settings" to create missing presets
 
----
-*YS Guardian - Keeping your Cinema 4D projects clean and professional*
+### Redshift Configuration
+```
+RenderView → Options → Snapshot Settings
+├── Format: EXR (not .rssnap2)
+├── Path: C:\cache\rs snapshots\
+└── Auto-increment: Enabled
+```
+
+## License
+
+Proprietary software developed by Yambo Studio for internal production use.
+
+## Links
+
+[GitHub Repository](https://github.com/yamb0x/ys-guardian) · [Report Issues](https://github.com/yamb0x/ys-guardian/issues) · [Development Guide](CLAUDE.md)
