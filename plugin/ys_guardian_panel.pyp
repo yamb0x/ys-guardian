@@ -1168,7 +1168,7 @@ class YSPanel(gui.GeDialog):
         }
         self._all_muted = False
 
-        self.SetInt32(G.STEP, 8)
+        self.SetInt32(G.STEP, 10)
 
         # Load artist name from computer-level settings
         self._artist_name = GlobalSettings.load_artist_name()
@@ -1321,33 +1321,34 @@ class YSPanel(gui.GeDialog):
         _snapshot_handler.open_artist_folder(doc, self._artist_name)
 
     def _create_vibrate_null(self, doc):
-        """Create a vibrate null with random position expression"""
+        """Merge vibrate null from C4D file"""
         if not doc:
             return
 
-        # Create null object
-        null = c4d.BaseObject(c4d.Onull)
-        null.SetName("Vibrate_Null")
+        try:
+            # Get path to the C4D file
+            plugin_dir = os.path.dirname(os.path.dirname(__file__))
+            c4d_file = os.path.join(plugin_dir, "c4d", "VibrateNull.c4d")
 
-        # Add vibrate tag (Position)
-        vibrate_tag = c4d.BaseTag(c4d.Tvibrate)
-        null.InsertTag(vibrate_tag)
+            # Check if file exists
+            if not os.path.exists(c4d_file):
+                safe_print(f"VibrateNull.c4d not found at: {c4d_file}")
+                c4d.gui.MessageDialog("VibrateNull.c4d file not found in c4d folder")
+                return
 
-        # Set vibrate parameters
-        vibrate_tag[c4d.VIBRATEEXPRESSION_ENABLEPOSITION] = True
-        vibrate_tag[c4d.VIBRATEEXPRESSION_AMPLITUDEX] = 10
-        vibrate_tag[c4d.VIBRATEEXPRESSION_AMPLITUDEY] = 10
-        vibrate_tag[c4d.VIBRATEEXPRESSION_AMPLITUDEZ] = 10
-        vibrate_tag[c4d.VIBRATEEXPRESSION_FREQUENCYX] = 2
-        vibrate_tag[c4d.VIBRATEEXPRESSION_FREQUENCYY] = 2
-        vibrate_tag[c4d.VIBRATEEXPRESSION_FREQUENCYZ] = 2
+            # Merge the C4D file into the current document
+            merge_doc = c4d.documents.MergeDocument(doc, c4d_file, c4d.SCENEFILTER_OBJECTS | c4d.SCENEFILTER_MATERIALS)
 
-        # Insert into document
-        doc.InsertObject(null)
-        doc.SetActiveObject(null, c4d.SELECTION_NEW)
-        c4d.EventAdd()
+            if merge_doc:
+                c4d.EventAdd()
+                safe_print("Merged vibrate null from VibrateNull.c4d")
+            else:
+                safe_print("Failed to merge VibrateNull.c4d")
+                c4d.gui.MessageDialog("Failed to merge VibrateNull.c4d")
 
-        safe_print("Created vibrate null")
+        except Exception as e:
+            safe_print(f"Error merging vibrate null: {e}")
+            c4d.gui.MessageDialog(f"Error loading vibrate null: {e}")
 
     def _force_render_settings(self, doc):
         """Force apply render settings based on active preset"""
@@ -1376,27 +1377,35 @@ class YSPanel(gui.GeDialog):
                 doc.InsertRenderData(target_rd)
                 safe_print(f"Created new render preset: {preset_name}")
 
-            # Apply standard settings based on preset
+            # Apply standard settings and output paths based on preset
             if preset_name == "previz":
                 # Low quality for fast preview
                 target_rd[c4d.RDATA_XRES] = 1280
                 target_rd[c4d.RDATA_YRES] = 720
                 target_rd[c4d.RDATA_FRAMERATE] = 25
+                # Set output path
+                target_rd[c4d.RDATA_PATH] = "../../output/previz/_Shots/$take/$prj"
             elif preset_name == "pre_render":
                 # Medium quality
                 target_rd[c4d.RDATA_XRES] = 1920
                 target_rd[c4d.RDATA_YRES] = 1080
                 target_rd[c4d.RDATA_FRAMERATE] = 25
+                # Set output path
+                target_rd[c4d.RDATA_PATH] = "../../output/pre_render/_Shots/$take/v01/$prj"
             elif preset_name == "render":
                 # High quality
                 target_rd[c4d.RDATA_XRES] = 1920
                 target_rd[c4d.RDATA_YRES] = 1080
                 target_rd[c4d.RDATA_FRAMERATE] = 25
+                # Set output path
+                target_rd[c4d.RDATA_PATH] = "../../output/render/_Shots/$take/v01/$prj"
             elif preset_name == "stills":
                 # Still image settings
                 target_rd[c4d.RDATA_XRES] = 3840
                 target_rd[c4d.RDATA_YRES] = 2160
                 target_rd[c4d.RDATA_FRAMERATE] = 25
+                # Set output path
+                target_rd[c4d.RDATA_PATH] = "../../output/stills/_Shots/$take/v01/$prj"
 
             # Set as active
             doc.SetActiveRenderData(target_rd)
@@ -1404,7 +1413,8 @@ class YSPanel(gui.GeDialog):
 
             c4d.gui.MessageDialog(f"Applied standard settings for '{preset_name}' preset\n\n"
                                  f"Resolution: {target_rd[c4d.RDATA_XRES]}x{target_rd[c4d.RDATA_YRES]}\n"
-                                 f"Frame Rate: {target_rd[c4d.RDATA_FRAMERATE]} fps")
+                                 f"Frame Rate: {target_rd[c4d.RDATA_FRAMERATE]} fps\n"
+                                 f"Output Path: {target_rd[c4d.RDATA_PATH]}")
 
         except Exception as e:
             safe_print(f"Error forcing render settings: {e}")
@@ -1415,12 +1425,24 @@ class YSPanel(gui.GeDialog):
             return
 
         try:
-            # Common vertical resolutions (9:16 aspect ratio)
+            # Common vertical resolutions (9:16 aspect ratio) and output paths
             vertical_presets = {
-                "previz": (720, 1280),      # 720x1280
-                "pre_render": (1080, 1920),  # 1080x1920 (standard Instagram/TikTok)
-                "render": (1080, 1920),      # 1080x1920
-                "stills": (2160, 3840)       # 2160x3840 (4K vertical)
+                "previz": {
+                    "resolution": (720, 1280),
+                    "path": "../../output/previz/_Shots/$take/$prj"
+                },
+                "pre_render": {
+                    "resolution": (1080, 1920),
+                    "path": "../../output/pre_render/_Shots/$take/v01/$prj"
+                },
+                "render": {
+                    "resolution": (1080, 1920),
+                    "path": "../../output/render/_Shots/$take/v01/$prj"
+                },
+                "stills": {
+                    "resolution": (2160, 3840),
+                    "path": "../../output/stills/_Shots/$take/v01/$prj"
+                }
             }
 
             changed_count = 0
@@ -1430,13 +1452,16 @@ class YSPanel(gui.GeDialog):
                 preset_name = (rd.GetName() or "").strip().lower()
 
                 if preset_name in vertical_presets:
-                    width, height = vertical_presets[preset_name]
+                    preset_data = vertical_presets[preset_name]
+                    width, height = preset_data["resolution"]
                     # Set vertical resolution
                     rd[c4d.RDATA_XRES] = width
                     rd[c4d.RDATA_YRES] = height
                     rd[c4d.RDATA_FRAMERATE] = 25
+                    # Set output path
+                    rd[c4d.RDATA_PATH] = preset_data["path"]
                     changed_count += 1
-                    safe_print(f"Changed '{preset_name}' to {width}x{height} (9:16)")
+                    safe_print(f"Changed '{preset_name}' to {width}x{height} (9:16) with path: {preset_data['path']}")
 
                 rd = rd.GetNext()
 

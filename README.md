@@ -1,9 +1,9 @@
-# YS Guardian v1.0 - Cinema 4D Production Quality Control Plugin
+# YS Guardian v1.0 - C4D Production Assistant
 
-**Professional production quality control and automation toolkit for Cinema 4D 2024 with Redshift 3D**
+**Yambo Studio pipeline assistant and automation toolkit for C4D (2024 + RS 2025)**
 
 ## 🎯 Overview
-YS Guardian is a comprehensive quality control plugin that acts as a real-time watchdog for Cinema 4D production workflows. It continuously monitors your scene for common production issues, automates repetitive tasks, and ensures consistency across team projects.
+YS Guardian is a pipeline verification control tool that acts as a real-time watchdog for Cinema 4D daily workflow. It continuously monitors your scene for common 3D pipeline issues, automates repetitive tasks, provide and ensures consistency across team projects.
 
 ## ✨ Features
 
@@ -25,9 +25,9 @@ Each check displays:
 ### 🎬 Production Management
 
 #### Shot & Artist Tracking
-- **Shot ID Management** - Syncs with Cinema 4D's Take system for consistent naming
-- **Artist Name Persistence** - Saves per computer/user for automatic identification
-- **Organized Output Structure** - Creates dated folders per artist
+- **Shot ID Management** - Syncs with Cinema 4D's Take system for consistent naming (change the 'Main' take that define the output path)
+- **Artist Name Persistence** - Saves per computer/user for stills folder m
+- **Organized Output Structure** - Creates dated folders per artist (output/stills/YYMMDD)
 
 #### Render Preset System
 - **Quick Preset Switching** - One-click tabs for previz, pre_render, render, and stills
@@ -53,7 +53,7 @@ Each check displays:
 ### 📸 Stills Management
 - **Save Still** - Captures RenderView snapshots (EXR format)
 - **Automatic Conversion** - Converts EXR to PNG with HDR tone mapping
-- **Organized Storage** - `Output/ArtistName/YYMMDD/scenename_HHMMSS.png`
+- **Organized Storage** - `Output/ArtistName/YYMMDD/scenename.png`
 - **Open Folder** - Quick access to your stills folder
 
 ### 🎛 Monitoring Controls
@@ -89,12 +89,12 @@ icons/                              # All UI icons
 ## 🚀 Usage
 
 ### Opening the Panel
-**Extensions → YS Guardian** or assign a keyboard shortcut for quick access
+**Extensions → YS Guardian** and dock it in your cinema4d layout
 
 ### Initial Setup
 1. **Enter Artist Name** - Automatically saved per computer
 2. **Configure Monitoring** - Enable/disable specific quality checks
-3. **Set Update Rate** - Default 800ms (8 x 100ms)
+3. **Set Update Rate** - Default 1000ms (10 x 100ms)
 4. **Configure Redshift** - Set snapshot format to EXR
 
 ### Daily Workflow

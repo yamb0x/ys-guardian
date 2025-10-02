@@ -130,6 +130,30 @@ if !ICON_COUNT! gtr 0 (
 )
 
 echo.
+echo Step 3a: Installing C4D asset files...
+echo ----------------------------------------
+
+REM Create c4d directory in destination
+set DEST_C4D_DIR=%DEST_DIR%\c4d
+if not exist "%DEST_C4D_DIR%" (
+    mkdir "%DEST_C4D_DIR%"
+    echo [OK] Created c4d directory
+)
+
+REM Copy C4D asset files
+set C4D_DIR=%SCRIPT_DIR%\..\c4d
+if exist "%C4D_DIR%\VibrateNull.c4d" (
+    copy /Y "%C4D_DIR%\VibrateNull.c4d" "%DEST_C4D_DIR%\VibrateNull.c4d" >nul
+    if %errorlevel% equ 0 (
+        echo [OK] Copied VibrateNull.c4d asset
+    ) else (
+        echo [WARNING] Failed to copy VibrateNull.c4d
+    )
+) else (
+    echo [WARNING] VibrateNull.c4d not found in c4d folder
+)
+
+echo.
 echo Step 4: Creating output directory structure...
 echo ----------------------------------------
 if not exist "C:\YS_Guardian_Output" (

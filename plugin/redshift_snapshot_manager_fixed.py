@@ -186,9 +186,6 @@ class RedshiftSnapshotManager:
         self._log(f"Output directory: {output_dir}")
 
         try:
-            # Generate output filename with timestamp
-            timestamp = datetime.now().strftime("%H%M%S")
-
             # Get scene name from document
             doc_name = doc.GetDocumentName()
             if doc_name:
@@ -198,8 +195,8 @@ class RedshiftSnapshotManager:
                 scene_name = "untitled"
             self._log(f"Scene name: {scene_name}")
 
-            # Create output filename
-            output_filename = f"{scene_name}_{timestamp}.png"
+            # Create output filename (without timestamp)
+            output_filename = f"{scene_name}.png"
             output_path = os.path.join(output_dir, output_filename)
 
             # Convert EXR to PNG
