@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Cinema 4D
+*.c4d.bak
+*.c4d_bak*
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific
+nul
+*.log
+Output/
+YS_Guardian_Output/
+.claude/
+
+# Temporary files
+temp/
+tmp/
+cache/
