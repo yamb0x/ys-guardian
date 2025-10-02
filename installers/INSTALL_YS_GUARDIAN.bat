@@ -20,7 +20,7 @@ echo     - 4x4 Quick Actions grid with tools:
 echo       * Select Bad Lights / Visibility / Cameras
 echo       * Vibrate Null creation
 echo       * Basic Camera Rig setup
-echo       * YS-Alembic Browser
+echo       * Drop to Floor (position objects on ground)
 echo       * Plugin Info and Checks
 echo     - Redshift snapshot management (Save Still)
 echo     - ACES color-accurate EXR to PNG conversion

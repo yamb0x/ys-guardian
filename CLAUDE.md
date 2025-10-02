@@ -124,6 +124,7 @@ The plugin should do what it can do well, and clearly communicate its limitation
 - [ ] All 5 quality checks function correctly
 - [ ] Icons display properly in Quality Check Status
 - [ ] All Quick Action buttons work (8 buttons total in 4x4 grid)
+- [ ] Drop to Floor functionality works with selected objects
 - [ ] Rounded corners render on status bars
 - [ ] Info dialog shows clean formatting (no ====)
 - [ ] Artist name persistence works
@@ -153,7 +154,7 @@ The plugin should do what it can do well, and clearly communicate its limitation
 │ [Select Lights] [Select Visibility] │
 │ [Select Keys]   [Select Cameras]    │
 │ [Vibrate Null]  [Basic Cam Rig]     │
-│ [Asset Browser] [Plugin Info]       │
+│ [Drop to Floor] [Plugin Info]       │
 ├─────────────────────────────────────┤
 │ Stills Management                    │
 │ [Open Folder]   [Save Still]        │

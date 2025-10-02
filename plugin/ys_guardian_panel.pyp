@@ -859,7 +859,7 @@ class G:
     # New Quick Action buttons
     BTN_VIBRATE_NULL = 1106
     BTN_CAM_RIG = 1107
-    BTN_ASSET_BROWSER = 1108
+    BTN_DROP_TO_FLOOR = 1108  # Drop to Floor functionality
     BTN_PLACEHOLDER = 1109  # Fourth button placeholder
 
     # Render preset tab buttons
@@ -1132,7 +1132,7 @@ class YSPanel(gui.GeDialog):
         self.GroupBegin(52, c4d.BFH_SCALEFIT, 4, 0)
         self.AddButton(G.BTN_VIBRATE_NULL,c4d.BFH_SCALEFIT,0,0,"Vibrate Null")
         self.AddButton(G.BTN_CAM_RIG,c4d.BFH_SCALEFIT,0,0,"Basic Cam Rig")
-        self.AddButton(G.BTN_ASSET_BROWSER,c4d.BFH_SCALEFIT,0,0,"YS-Alembic Browser")
+        self.AddButton(G.BTN_DROP_TO_FLOOR,c4d.BFH_SCALEFIT,0,0,"Drop to Floor")
         self.AddButton(G.BTN_INFO, c4d.BFH_SCALEFIT, 0, 0, "Plugin Info & Checks")
         self.GroupEnd()
 
@@ -1271,9 +1271,8 @@ class YSPanel(gui.GeDialog):
         elif cid == G.BTN_CAM_RIG:
             self._create_basic_cam_rig(doc)
 
-        elif cid == G.BTN_ASSET_BROWSER:
-            # Open the Asset Browser
-            c4d.CallCommand(200000193)  # Open Asset Browser
+        elif cid == G.BTN_DROP_TO_FLOOR:
+            self._drop_to_floor(doc)
 
         elif cid == G.SEL_LIGHTS:
             if hasattr(self, '_lights_bad'):
@@ -1513,6 +1512,79 @@ class YSPanel(gui.GeDialog):
         c4d.EventAdd()
 
         safe_print("Created basic camera rig")
+
+    def _drop_to_floor(self, doc):
+        """Drop selected objects to floor (Y=0 plane)"""
+        if not doc:
+            return
+
+        # Get selected objects
+        selected = doc.GetActiveObjects(c4d.GETACTIVEOBJECTFLAGS_SELECTIONORDER)
+        if not selected:
+            safe_print("Please select one or more objects to drop to floor")
+            return
+
+        # Start undo
+        doc.StartUndo()
+
+        dropped_count = 0
+
+        for obj in selected:
+            # Get object's global matrix and bounding box
+            mg = obj.GetMg()
+            mp = obj.GetMp()  # Center point in local space
+            rad = obj.GetRad()  # Radius (half dimensions) in local space
+
+            # If object has no geometry (like a null), use a small default radius
+            if rad.GetLength() == 0:
+                rad = c4d.Vector(50, 50, 50)  # Default size for nulls
+
+            # Calculate all 8 corners of the bounding box in local space
+            corners = [
+                c4d.Vector(mp.x - rad.x, mp.y - rad.y, mp.z - rad.z),
+                c4d.Vector(mp.x + rad.x, mp.y - rad.y, mp.z - rad.z),
+                c4d.Vector(mp.x - rad.x, mp.y + rad.y, mp.z - rad.z),
+                c4d.Vector(mp.x + rad.x, mp.y + rad.y, mp.z - rad.z),
+                c4d.Vector(mp.x - rad.x, mp.y - rad.y, mp.z + rad.z),
+                c4d.Vector(mp.x + rad.x, mp.y - rad.y, mp.z + rad.z),
+                c4d.Vector(mp.x - rad.x, mp.y + rad.y, mp.z + rad.z),
+                c4d.Vector(mp.x + rad.x, mp.y + rad.y, mp.z + rad.z)
+            ]
+
+            # Transform corners to world space and find the lowest Y value
+            min_y = float('inf')
+            for corner in corners:
+                world_corner = mg * corner
+                if world_corner.y < min_y:
+                    min_y = world_corner.y
+
+            # Calculate how much to move the object
+            if abs(min_y) > 0.001:  # Small threshold to avoid tiny movements
+                move_distance = -min_y
+
+                # Record undo for position change
+                doc.AddUndo(c4d.UNDOTYPE_CHANGE, obj)
+
+                # Move the object
+                current_pos = obj.GetAbsPos()
+                new_pos = c4d.Vector(current_pos.x, current_pos.y + move_distance, current_pos.z)
+                obj.SetAbsPos(new_pos)
+
+                dropped_count += 1
+
+        # End undo
+        doc.EndUndo()
+
+        # Update the scene
+        c4d.EventAdd()
+
+        # Show result message in console only (no popup for smooth workflow)
+        if dropped_count == 1:
+            safe_print(f"Dropped 1 object to floor")
+        elif dropped_count > 1:
+            safe_print(f"Dropped {dropped_count} objects to floor")
+        else:
+            safe_print("No objects needed dropping - already on floor")
 
     def _take_renderview_snapshot(self):
         """Take a snapshot from RenderView"""

@@ -47,8 +47,24 @@ Each check displays:
 **Row 2 - Creation Tools:**
 - **Vibrate Null** - Creates null with randomized vibration expression
 - **Basic Cam Rig** - Creates camera with null parent for easy animation
-- **YS-Alembic Browser** - Quick access to asset browser
+- **Drop to Floor** - Instantly position selected objects on ground plane (Y=0)
 - **Plugin Info** - Displays detailed status and troubleshooting info
+
+### 🎯 Drop to Floor Feature
+The Drop to Floor tool provides instant object grounding with professional accuracy:
+- **Smart Bounding Box Calculation** - Correctly handles rotated and scaled objects
+- **World Space Precision** - Calculates true lowest point regardless of object orientation
+- **Batch Processing** - Drop multiple selected objects in one click
+- **Silent Operation** - No popup interruptions for smooth workflow
+- **Full Undo Support** - Complete undo/redo integration
+- **Console Feedback** - Status messages in console only
+
+#### How It Works:
+1. Select one or more objects
+2. Click "Drop to Floor" button
+3. Objects instantly position with their bottom at Y=0
+4. Works correctly with rotated, scaled, and grouped objects
+5. Nulls and empty objects use default 50-unit radius
 
 ### 📸 Stills Management
 - **Save Still** - Captures RenderView snapshots (EXR format)
