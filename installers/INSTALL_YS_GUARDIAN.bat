@@ -2,7 +2,7 @@
 setlocal EnableDelayedExpansion
 
 echo =========================================================
-echo     YS Guardian v2.2 - Professional Installation
+echo     YS Guardian v1.0 - Professional Installation
 echo     Cinema 4D 2024 Quality Control Plugin
 echo =========================================================
 echo.

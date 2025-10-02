@@ -117,7 +117,7 @@ The plugin should do what it can do well, and clearly communicate its limitation
    - Check all icon filenames match actual files in `icons/` folder
    - Update icon count if new icons are added
 
-3. **Version Number**: Update if significant changes are made (currently v2.2)
+3. **Version Number**: Update if significant changes are made (currently v1.0)
 
 ### Testing Checklist for Each Update:
 - [ ] Main plugin file loads without errors
@@ -130,7 +130,7 @@ The plugin should do what it can do well, and clearly communicate its limitation
 - [ ] Shot ID syncs with Take system
 - [ ] Render Preset selection works
 
-### Current UI Layout (v2.2):
+### Current UI Layout (v1.0):
 ```
 ┌─────────────────────────────────────┐
 │ Shot ID: [____] Preset: [dropdown]  │

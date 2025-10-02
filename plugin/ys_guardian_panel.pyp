@@ -28,7 +28,7 @@ except ImportError as e:
 
 # Plugin ID - change if ID collision
 PLUGIN_ID = 2099069
-PLUGIN_NAME = "YS Guardian v2.2"
+PLUGIN_NAME = "YS Guardian v1.0"
 PRESETS = ["previz", "pre_render", "render", "stills"]
 
 # Icon paths - check both development and installed locations
@@ -1505,7 +1505,7 @@ class YSPanel(gui.GeDialog):
     def _show_info_dialog(self):
         """Show comprehensive plugin info and system checks"""
         info = []
-        info.append("YS GUARDIAN v2.2 - PLUGIN INFO")
+        info.append("YS GUARDIAN v1.0 - PLUGIN INFO")
         info.append("-" * 40)
         info.append("")
 
@@ -1655,7 +1655,7 @@ class YSPanelCmd(plugins.CommandData):
     def Execute(self, doc):
         if self.dlg is None:
             self.dlg = YSPanel()
-            safe_print("YS Guardian Panel v2.2 initialized")
+            safe_print("YS Guardian Panel v1.0 initialized")
         # Pass plugin ID as second argument for layout persistence
         return self.dlg.Open(dlgtype=c4d.DLG_TYPE_ASYNC, pluginid=PLUGIN_ID,
                             defaultw=720, defaulth=440)
@@ -1677,7 +1677,7 @@ def Register():
         dat=YSPanelCmd()
     )
     if ok:
-        safe_print("Guardian panel v2.2 registered successfully")
+        safe_print("Guardian panel v1.0 registered successfully")
     else:
         safe_print("Failed to register Guardian panel")
     return ok
@@ -1685,7 +1685,7 @@ def Register():
 if __name__ == "__main__":
     # Print setup info
     print(f"\n{'='*50}")
-    print(f"YS Guardian Panel v2.2 - Complete Edition")
+    print(f"YS Guardian Panel v1.0 - Complete Edition")
     print(f"{'='*50}")
 
     if SNAPSHOT_AVAILABLE and EXR_CONVERTER_AVAILABLE:

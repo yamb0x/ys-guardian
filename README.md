@@ -1,4 +1,4 @@
-# YS Guardian v2.2 - Cinema 4D Production Quality Control Plugin
+# YS Guardian v1.0 - Cinema 4D Production Quality Control Plugin
 
 **Professional production quality control and automation toolkit for Cinema 4D 2024 with Redshift 3D**
 
@@ -229,10 +229,13 @@ ys_guardian/
 
 ## 📝 Version History
 
-- **v2.2** (Current) - Complete UI overhaul, 8 quick actions, Force Vertical, visual improvements
-- **v2.1** - Added preset tabs, mute controls, improved performance
-- **v2.0** - Core quality checks, artist tracking, snapshot system
-- **v1.0** - Initial release with basic monitoring
+- **v1.0** (Current) - Initial release with complete feature set:
+  - 5 real-time quality checks with visual indicators
+  - 8 quick action tools in grid layout
+  - Render preset management with Force Vertical
+  - Stills management with EXR conversion
+  - Artist tracking and Shot ID synchronization
+  - Performance optimization with smart caching
 
 ## 🤝 Contributing
 
