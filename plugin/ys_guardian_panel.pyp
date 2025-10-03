@@ -30,38 +30,18 @@ except ImportError as e:
 # Plugin ID - change if ID collision
 PLUGIN_ID = 2099069
 PLUGIN_NAME = "YS Guardian v1.0"
+
+# Preset names - normalized to lowercase with underscores
+# The system accepts both "pre_render" and "pre-render" (case-insensitive)
 PRESETS = ["previz", "pre_render", "render", "stills"]
 
-# Icon paths - check both development and installed locations
-plugin_dir = os.path.dirname(__file__)
-# First try parent directory (current structure)
-parent_icons = os.path.join(plugin_dir, "..", "icons")
-# Then try plugin directory
-plugin_icons = os.path.join(plugin_dir, "icons")
+def normalize_preset_name(name):
+    """Normalize preset name: lowercase, replace hyphens/spaces with underscores"""
+    if not name:
+        return ""
+    return name.strip().lower().replace("-", "_").replace(" ", "_")
 
-if os.path.exists(parent_icons):
-    ICONS_DIR = parent_icons
-elif os.path.exists(plugin_icons):
-    ICONS_DIR = plugin_icons
-else:
-    # Fallback to parent directory
-    ICONS_DIR = parent_icons
-
-ICONS = {
-    # Status icons
-    "lights_bad": os.path.join(ICONS_DIR, "lights outside icon.tif"),
-    "visibility_bad": os.path.join(ICONS_DIR, "visability trap icon.tif"),
-    "keyframe_bad": os.path.join(ICONS_DIR, "keyframe sanity icon.tif"),
-    "camera_bad": os.path.join(ICONS_DIR, "camera with non zero shift icon.tif"),
-    "preset_bad": os.path.join(ICONS_DIR, "render preset conlfict icon.tif"),
-    # Toggle icons
-    "lights_toggle": os.path.join(ICONS_DIR, "lights toggle.tif"),
-    "visibility_toggle": os.path.join(ICONS_DIR, "visability toggle.tif"),
-    "keyframe_toggle": os.path.join(ICONS_DIR, "keyframe toggle.png"),
-    "camera_toggle": os.path.join(ICONS_DIR, "camera toggle.tif"),
-    # Info icon
-    "info": os.path.join(ICONS_DIR, "info.svg")
-}
+# Icons removed - using text-based status indicators only
 
 # Performance settings for watcher
 MAX_OBJECTS_PER_CHECK = 1000  # Process in chunks
@@ -492,7 +472,7 @@ def check_camera_shift(doc):
 
 # ---------------- render preset conflicts (optimized) ----------------
 def check_render_conflicts(doc):
-    """Check for render setting conflicts"""
+    """Check for render setting conflicts - accepts pre_render, pre-render, Pre-Render etc."""
     cached = check_cache.get(doc, "rdc")
     if cached is not None:
         return cached
@@ -508,7 +488,8 @@ def check_render_conflicts(doc):
 
         while rd and count < max_check:
             try:
-                name = (rd.GetName() or "").strip().lower()
+                # Normalize the name (lowercase, replace hyphens/spaces with underscores)
+                name = normalize_preset_name(rd.GetName() or "")
                 if name in allowed:
                     name_counts[name] += 1
                 else:
@@ -540,40 +521,6 @@ class StatusArea(gui.GeUserArea):
         self.font = c4d.FONT_MONOSPACED  # Terminal-style monospace font
         self.last_draw_time = 0
         self.min_draw_interval = 0.05  # Minimum 50ms between redraws
-        self.icons = {}
-        self._load_icons()
-
-    def _load_icons(self):
-        """Load all status icons"""
-        try:
-            icon_map = {
-                "lights": ICONS.get("lights_bad"),
-                "visibility": ICONS.get("visibility_bad"),
-                "keyframe": ICONS.get("keyframe_bad"),
-                "camera": ICONS.get("camera_bad"),
-                "preset": ICONS.get("preset_bad")
-            }
-
-            safe_print(f"Loading icons from: {ICONS_DIR}")
-            icons_loaded = 0
-
-            for name, path in icon_map.items():
-                if path and os.path.exists(path):
-                    bmp = c4d.bitmaps.BaseBitmap()
-                    if bmp.InitWith(path)[0] == c4d.IMAGERESULT_OK:
-                        # Don't resize, just use original
-                        self.icons[name] = bmp
-                        icons_loaded += 1
-                        safe_print(f"Loaded icon: {name} from {os.path.basename(path)}")
-                    else:
-                        safe_print(f"Failed to init bitmap for: {path}")
-                else:
-                    safe_print(f"Icon path not found: {path}")
-
-            safe_print(f"Total icons loaded: {icons_loaded}/{len(icon_map)}")
-
-        except Exception as e:
-            safe_print(f"Error loading icons: {e}")
 
     def GetMinSize(self):
         rows = sum(1 for _, v in self.show.items() if v)
@@ -956,19 +903,24 @@ class YSPanel(gui.GeDialog):
             safe_print(f"Error applying shot name: {e}")
 
     def _apply_preset(self, doc, preset_name):
+        """Apply preset - accepts pre_render, pre-render, Pre-Render, etc."""
         if not doc:
             return
 
         try:
+            # Normalize the target preset name
+            normalized_target = normalize_preset_name(preset_name)
             rd = doc.GetFirstRenderData()
 
             while rd:
-                if (rd.GetName() or "").strip().lower() == preset_name:
+                # Normalize the render data name for comparison
+                normalized_rd = normalize_preset_name(rd.GetName() or "")
+                if normalized_rd == normalized_target:
                     doc.SetActiveRenderData(rd)
                     c4d.EventAdd()
-                    self._active_preset = preset_name
+                    self._active_preset = normalized_target
                     self._update_preset_buttons()
-                    safe_print(f"Switched to render preset: {preset_name}")
+                    safe_print(f"Switched to render preset: {rd.GetName()} (normalized: {normalized_target})")
                     break
                 rd = rd.GetNext()
         except Exception as e:
@@ -1128,7 +1080,7 @@ class YSPanel(gui.GeDialog):
 
         self.GroupEnd()
 
-        # Status area (visual watcher with colors and icons)
+        # Status area (visual watcher with color-coded status)
         self.AddSeparatorH(12)
         self.GroupBegin(40, c4d.BFH_SCALEFIT, 1, 0)
         self.AddStaticText(0,0,0,0,"Quality Check Status",0)
@@ -1189,7 +1141,7 @@ class YSPanel(gui.GeDialog):
         self.AddButton(G.BTN_SNAPSHOT, c4d.BFH_SCALEFIT, 0, 0, "Save Still")
         self.GroupEnd()
 
-        # Add GitHub button with link icon (↗)
+        # Add GitHub button with link arrow (↗)
         self.AddSeparatorH(8)
         self.GroupBegin(62, c4d.BFH_SCALEFIT, 1, 0)
         self.AddButton(G.BTN_GITHUB, c4d.BFH_SCALEFIT, 0, 0, "View on GitHub ↗")
@@ -1671,25 +1623,47 @@ class YSPanel(gui.GeDialog):
         new_layer.SetName(name)
         new_layer.InsertUnder(layer_root)
 
-        # Set a color for the layer (optional - makes it easier to see)
-        # Use different colors for common group names
-        colors = {
-            "lights": c4d.Vector(1, 1, 0),      # Yellow
-            "cameras": c4d.Vector(0, 1, 1),     # Cyan
-            "environment": c4d.Vector(0, 1, 0),  # Green
-            "models": c4d.Vector(0.5, 0.5, 1),  # Light blue
-            "animation": c4d.Vector(1, 0.5, 0), # Orange
-        }
+        # Generate unique random color based on layer name hash
+        # This ensures same name always gets same color (consistent)
+        import hashlib
 
-        # Check if name contains any of our keywords
-        lower_name = name.lower()
-        for key, color in colors.items():
-            if key in lower_name:
-                new_layer[c4d.ID_LAYER_COLOR] = color
-                break
-        else:
-            # Default color if no keyword match
-            new_layer[c4d.ID_LAYER_COLOR] = c4d.Vector(0.7, 0.7, 0.7)
+        # Create hash from name
+        name_hash = int(hashlib.md5(name.encode()).hexdigest()[:8], 16)
+
+        # Generate pleasant, distinct colors using golden ratio
+        # This creates visually distinct colors that are evenly distributed
+        golden_ratio = 0.618033988749895
+        hue = (name_hash * golden_ratio) % 1.0
+
+        # Convert HSV to RGB (S=0.6, V=0.95 for pleasant, bright colors)
+        saturation = 0.6
+        value = 0.95
+
+        def hsv_to_rgb(h, s, v):
+            """Convert HSV to RGB"""
+            h_i = int(h * 6)
+            f = h * 6 - h_i
+            p = v * (1 - s)
+            q = v * (1 - f * s)
+            t = v * (1 - (1 - f) * s)
+
+            if h_i == 0:
+                r, g, b = v, t, p
+            elif h_i == 1:
+                r, g, b = q, v, p
+            elif h_i == 2:
+                r, g, b = p, v, t
+            elif h_i == 3:
+                r, g, b = p, q, v
+            elif h_i == 4:
+                r, g, b = t, p, v
+            else:
+                r, g, b = v, p, q
+
+            return c4d.Vector(r, g, b)
+
+        unique_color = hsv_to_rgb(hue, saturation, value)
+        new_layer[c4d.ID_LAYER_COLOR] = unique_color
 
         doc.AddUndo(c4d.UNDOTYPE_NEW, new_layer)
         return new_layer, True  # Return new layer and flag
@@ -2016,7 +1990,7 @@ The script I am interested to build is: """ + user_prompt
             child = child.GetNext()
 
     def _drop_to_floor(self, doc):
-        """Drop selected objects to floor (Y=0 plane)"""
+        """Drop selected objects to floor (Y=0 plane) - handles rotation and hierarchy correctly"""
         if not doc:
             return
 
@@ -2032,47 +2006,121 @@ The script I am interested to build is: """ + user_prompt
         dropped_count = 0
 
         for obj in selected:
-            # Get object's global matrix and bounding box
+            # Get object's global matrix
             mg = obj.GetMg()
-            mp = obj.GetMp()  # Center point in local space
-            rad = obj.GetRad()  # Radius (half dimensions) in local space
 
-            # If object has no geometry (like a null), use a small default radius
-            if rad.GetLength() == 0:
-                rad = c4d.Vector(50, 50, 50)  # Default size for nulls
+            # Get cache (the actual geometry for display/render)
+            cache = obj.GetCache()
+            if cache is None:
+                cache = obj.GetDeformCache()
 
-            # Calculate all 8 corners of the bounding box in local space
-            corners = [
-                c4d.Vector(mp.x - rad.x, mp.y - rad.y, mp.z - rad.z),
-                c4d.Vector(mp.x + rad.x, mp.y - rad.y, mp.z - rad.z),
-                c4d.Vector(mp.x - rad.x, mp.y + rad.y, mp.z - rad.z),
-                c4d.Vector(mp.x + rad.x, mp.y + rad.y, mp.z - rad.z),
-                c4d.Vector(mp.x - rad.x, mp.y - rad.y, mp.z + rad.z),
-                c4d.Vector(mp.x + rad.x, mp.y - rad.y, mp.z + rad.z),
-                c4d.Vector(mp.x - rad.x, mp.y + rad.y, mp.z + rad.z),
-                c4d.Vector(mp.x + rad.x, mp.y + rad.y, mp.z + rad.z)
-            ]
+            # If we have a cache, use it to get the accurate global bounding box
+            if cache:
+                # Initialize with first point
+                min_y = None
 
-            # Transform corners to world space and find the lowest Y value
-            min_y = float('inf')
-            for corner in corners:
-                world_corner = mg * corner
-                if world_corner.y < min_y:
-                    min_y = world_corner.y
+                # Recursively process cache and all children
+                def process_cache(cache_obj, parent_mg):
+                    """Recursively get all points from cache hierarchy"""
+                    nonlocal min_y
+
+                    if not cache_obj:
+                        return
+
+                    # Get cache's local matrix
+                    cache_mg = cache_obj.GetMl()
+                    # Combine with parent matrix to get global position
+                    global_mg = parent_mg * cache_mg
+
+                    # Get points if this is a PointObject
+                    if cache_obj.CheckType(c4d.Opoint):
+                        points = cache_obj.GetAllPoints()
+                        if points:
+                            for point in points:
+                                # Transform point to global space
+                                global_point = global_mg * point
+                                if min_y is None or global_point.y < min_y:
+                                    min_y = global_point.y
+
+                    # Process children
+                    child = cache_obj.GetDown()
+                    if child:
+                        process_cache(child, global_mg)
+
+                    # Process siblings
+                    next_obj = cache_obj.GetNext()
+                    if next_obj:
+                        process_cache(next_obj, parent_mg)
+
+                # Process cache hierarchy
+                process_cache(cache, mg)
+
+                # If we didn't find any points, fall back to bounding box method
+                if min_y is None:
+                    # Use bounding box as fallback
+                    mp = obj.GetMp()
+                    rad = obj.GetRad()
+
+                    if rad.GetLength() == 0:
+                        rad = c4d.Vector(50, 50, 50)
+
+                    # Calculate all 8 corners
+                    corners = [
+                        c4d.Vector(mp.x - rad.x, mp.y - rad.y, mp.z - rad.z),
+                        c4d.Vector(mp.x + rad.x, mp.y - rad.y, mp.z - rad.z),
+                        c4d.Vector(mp.x - rad.x, mp.y + rad.y, mp.z - rad.z),
+                        c4d.Vector(mp.x + rad.x, mp.y + rad.y, mp.z - rad.z),
+                        c4d.Vector(mp.x - rad.x, mp.y - rad.y, mp.z + rad.z),
+                        c4d.Vector(mp.x + rad.x, mp.y - rad.y, mp.z + rad.z),
+                        c4d.Vector(mp.x - rad.x, mp.y + rad.y, mp.z + rad.z),
+                        c4d.Vector(mp.x + rad.x, mp.y + rad.y, mp.z + rad.z)
+                    ]
+
+                    min_y = float('inf')
+                    for corner in corners:
+                        world_corner = mg * corner
+                        if world_corner.y < min_y:
+                            min_y = world_corner.y
+            else:
+                # No cache - use bounding box method
+                mp = obj.GetMp()
+                rad = obj.GetRad()
+
+                if rad.GetLength() == 0:
+                    rad = c4d.Vector(50, 50, 50)
+
+                # Calculate all 8 corners
+                corners = [
+                    c4d.Vector(mp.x - rad.x, mp.y - rad.y, mp.z - rad.z),
+                    c4d.Vector(mp.x + rad.x, mp.y - rad.y, mp.z - rad.z),
+                    c4d.Vector(mp.x - rad.x, mp.y + rad.y, mp.z - rad.z),
+                    c4d.Vector(mp.x + rad.x, mp.y + rad.y, mp.z - rad.z),
+                    c4d.Vector(mp.x - rad.x, mp.y - rad.y, mp.z + rad.z),
+                    c4d.Vector(mp.x + rad.x, mp.y - rad.y, mp.z + rad.z),
+                    c4d.Vector(mp.x - rad.x, mp.y + rad.y, mp.z + rad.z),
+                    c4d.Vector(mp.x + rad.x, mp.y + rad.y, mp.z + rad.z)
+                ]
+
+                min_y = float('inf')
+                for corner in corners:
+                    world_corner = mg * corner
+                    if world_corner.y < min_y:
+                        min_y = world_corner.y
 
             # Calculate how much to move the object
-            if abs(min_y) > 0.001:  # Small threshold to avoid tiny movements
+            if min_y is not None and abs(min_y) > 0.001:  # Small threshold to avoid tiny movements
                 move_distance = -min_y
 
                 # Record undo for position change
                 doc.AddUndo(c4d.UNDOTYPE_CHANGE, obj)
 
-                # Move the object
+                # Move the object in global space
                 current_pos = obj.GetAbsPos()
                 new_pos = c4d.Vector(current_pos.x, current_pos.y + move_distance, current_pos.z)
                 obj.SetAbsPos(new_pos)
 
                 dropped_count += 1
+                safe_print(f"Dropped '{obj.GetName()}' by {move_distance:.2f} units")
 
         # End undo
         doc.EndUndo()
@@ -2102,58 +2150,68 @@ The script I am interested to build is: """ + user_prompt
         _snapshot_handler.take_snapshot(doc, self._artist_name)
 
     def _show_info_dialog(self):
-        """Show comprehensive plugin info and system checks"""
+        """Show plugin info and debugging information for team support"""
+        doc = c4d.documents.GetActiveDocument()
         info = []
         info.append("YS GUARDIAN v1.0 - PLUGIN INFO")
         info.append("")
-        info.append("")
 
-        # System checks section
+        # System diagnostics for team debugging
         info.append("SYSTEM CHECKS:")
         info.append("")
 
-        # Check snapshot system availability
+        # Cinema 4D version
+        try:
+            c4d_version = c4d.GetC4DVersion()
+            info.append(f"[OK] Cinema 4D version: {c4d_version}")
+        except:
+            info.append("[WARN] Could not detect C4D version")
+
+        # Plugin installation path
+        plugin_dir = os.path.dirname(__file__)
+        info.append(f"[OK] Plugin location: {plugin_dir}")
+
+        # Check snapshot system
         if SNAPSHOT_AVAILABLE:
             info.append("[OK] Snapshot system modules loaded")
         else:
             info.append("[FAIL] Snapshot modules not available")
-            info.append("       Fix: Check plugin installation")
+            info.append("       Contact support with this error")
 
         # Check EXR converter
         if EXR_CONVERTER_AVAILABLE:
             info.append(f"[OK] EXR converter available ({EXR_CONVERTER_METHOD})")
         else:
             info.append("[WARN] EXR converter not configured")
+            info.append("       System Python may not be available")
 
-        # Check Python dependencies
+        # Current document info
         info.append("")
-        info.append("PYTHON DEPENDENCIES:")
+        info.append("CURRENT SCENE:")
         info.append("")
-
-        # Check OpenEXR
-        try:
-            import subprocess
-            result = subprocess.run(["python", "-c", "import OpenEXR"],
-                                 capture_output=True, timeout=2)
-            if result.returncode == 0:
-                info.append("[OK] OpenEXR-Python installed")
+        if doc:
+            doc_path = doc.GetDocumentPath()
+            doc_name = doc.GetDocumentName()
+            info.append(f"[OK] Document: {doc_name}")
+            if doc_path:
+                info.append(f"[OK] Path: {doc_path}")
             else:
-                info.append("[FAIL] OpenEXR-Python not installed")
-                info.append("       Fix: pip install OpenEXR-Python")
-        except:
-            info.append("[WARN] Could not check OpenEXR")
+                info.append("[WARN] Document not saved yet")
 
-        # Check Pillow
-        try:
-            result = subprocess.run(["python", "-c", "from PIL import Image"],
-                                 capture_output=True, timeout=2)
-            if result.returncode == 0:
-                info.append("[OK] Pillow installed")
-            else:
-                info.append("[WARN] Pillow not installed (optional)")
-                info.append("       Fix: pip install Pillow")
-        except:
-            info.append("[WARN] Could not check Pillow")
+            # Count scene objects
+            obj_count = 0
+            op = doc.GetFirstObject()
+            def count_objects(op):
+                count = 0
+                while op:
+                    count += 1
+                    count += count_objects(op.GetDown())
+                    op = op.GetNext()
+                return count
+            obj_count = count_objects(op)
+            info.append(f"[OK] Scene objects: {obj_count}")
+        else:
+            info.append("[WARN] No active document")
 
         # Check directories
         info.append("")
@@ -2168,38 +2226,52 @@ The script I am interested to build is: """ + user_prompt
             except:
                 info.append("[OK] Redshift cache exists")
         else:
-            info.append("[WARN] Redshift cache folder not found")
+            info.append("[WARN] Redshift cache not found")
             info.append(f"       Expected: {rs_dir}")
 
         log_dir = r"C:\YS_Guardian_Output"
         if os.path.exists(log_dir):
             info.append("[OK] Log directory exists")
         else:
-            info.append("[WARN] Log directory not found")
-            info.append(f"       Will create at: {log_dir}")
+            info.append("[INFO] Log directory will be created on first use")
 
-        # Important notes section
+        # Snapshot workflow and Redshift setup
         info.append("")
-        info.append("IMPORTANT NOTES:")
+        info.append("REDSHIFT SNAPSHOT SETUP (REQUIRED):")
         info.append("")
-        info.append("1. BEFORE SAVING STILL:")
-        info.append("   - Take a snapshot in Redshift RenderView first")
-        info.append("   - The plugin saves the LATEST snapshot as PNG")
+        info.append("Configure Redshift RenderView first:")
+        info.append("1. Open Redshift RenderView")
+        info.append("2. Click Preferences (gear icon) -> Snapshots")
+        info.append("3. Configuration tab:")
+        info.append("   - Set path: C:/cache/rs snapshots")
+        info.append("   - Enable 'Save snapshots as EXR'")
+        info.append("   - Click OK")
         info.append("")
-        info.append("2. SNAPSHOT WORKFLOW:")
-        info.append("   - Press Snapshot in Redshift RenderView")
-        info.append("   - Click 'Save Still' in YS Guardian")
-        info.append("   - Still will be saved to your artist folder")
+        info.append("SNAPSHOT WORKFLOW:")
         info.append("")
-        info.append("3. OUTPUT LOCATION:")
-        info.append("   Project/Output/[Artist Name]/[Date]/")
+        info.append("1. Take snapshot in Redshift RenderView")
+        info.append("2. Click 'Save Still' in YS Guardian")
+        info.append("3. Output: Project/Output/[Artist]/[Date]/")
         info.append("")
-        info.append("4. QUALITY CHECKS:")
-        info.append("   - Lights: Must be in 'lights' group")
-        info.append("   - Visibility: No viewport/render mismatch")
-        info.append("   - Keyframes: Warns about multi-axis keys")
-        info.append("   - Cameras: No shift values allowed")
-        info.append("   - Presets: Only approved render presets")
+
+        # Quality checks reference
+        info.append("QUALITY CHECKS:")
+        info.append("")
+        info.append("- Lights: Must be in 'lights' group")
+        info.append("- Visibility: No viewport/render mismatch")
+        info.append("- Keyframes: Warns about multi-axis keys")
+        info.append("- Cameras: No shift values allowed")
+        info.append("- Presets: Only approved render presets")
+        info.append("")
+
+        # Troubleshooting guide
+        info.append("TROUBLESHOOTING:")
+        info.append("")
+        info.append("If experiencing issues, report to team with:")
+        info.append("1. Screenshot of this dialog")
+        info.append("2. Description of the problem")
+        info.append("3. Steps to reproduce")
+        info.append("4. Cinema 4D Console output (Shift+F10)")
         info.append("")
         info.append("-" * 40)
         info.append("Plugin by Yambo (C) 2025")
@@ -2267,11 +2339,34 @@ class YSPanelCmd(plugins.CommandData):
         return self.dlg.Restore(pluginid=PLUGIN_ID, secret=sec_ref)
 
 def Register():
+    # Load plugin icon (PNG format for best Cinema 4D compatibility)
+    icon = c4d.bitmaps.BaseBitmap()
+    icon_path = os.path.join(os.path.dirname(__file__), "icons", "ys-logo-alpha-32.png")
+
+    if os.path.exists(icon_path):
+        result = icon.InitWith(icon_path)
+        if result[0] == c4d.IMAGERESULT_OK:
+            # Validate icon properties
+            width = icon.GetBw()
+            height = icon.GetBh()
+            depth = icon.GetBt()
+
+            if width == 32 and height == 32:
+                safe_print(f"Plugin icon loaded: {icon_path} ({width}x{height}, {depth}-bit)")
+            else:
+                safe_print(f"Warning: Icon loaded but dimensions are {width}x{height}, expected 32x32")
+        else:
+            safe_print(f"Warning: Failed to load icon from {icon_path}")
+            icon = None  # Use no icon instead of empty bitmap
+    else:
+        safe_print(f"Warning: Icon not found at {icon_path}")
+        icon = None  # Use no icon instead of empty bitmap
+
     ok = plugins.RegisterCommandPlugin(
         id=PLUGIN_ID,
         str=PLUGIN_NAME,
         info=0,
-        icon=c4d.bitmaps.BaseBitmap(),
+        icon=icon,
         help="Open YS Guardian Panel",
         dat=YSPanelCmd()
     )

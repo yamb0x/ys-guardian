@@ -116,8 +116,6 @@ Copy plugin files to Cinema 4D plugins directory:
 C:\Program Files\Maxon Cinema 4D 2024\plugins\YS_Guardian\
 ├── plugin\
 │   └── ys_guardian_panel.pyp
-├── icons\
-│   └── [status and toggle icons]
 └── c4d\
     └── VibrateNull.c4d
 ```
@@ -204,13 +202,15 @@ Click **Select** buttons to select problematic objects for correction.
 - Check render data list for duplicate presets
 - Use "Force Settings" to create missing presets
 
-### Redshift Configuration
+### Redshift Configuration (Required for Save Still)
 ```
-RenderView → Options → Snapshot Settings
-├── Format: EXR (not .rssnap2)
-├── Path: C:\cache\rs snapshots\
-└── Auto-increment: Enabled
+Redshift RenderView → Preferences (gear icon) → Snapshots → Configuration
+├── Path: C:/cache/rs snapshots
+├── Format: Enable "Save snapshots as EXR" (not .rssnap2)
+└── Click OK to apply settings
 ```
+
+**Important**: This configuration must be set before using the Save Still feature. The installer creates the cache directory automatically.
 
 ## License
 

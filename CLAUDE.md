@@ -67,24 +67,30 @@ Additional features include Shot ID management, Render Preset selection, Artist 
 - **Artist Name Persistence**: Saved per computer/user
 - **Folder Structure Creation**: Organized output directory hierarchy
 - **File Organization Logic**: Proper naming and placement of files
-- **Redshift Snapshot Detection**: Automatically finds .rssnap2 files in temp folder
-- **Snapshot Conversion**: Converts .rssnap2 format to viewable PNG images
+- **Redshift Snapshot Support**: Works with EXR snapshots (requires manual Redshift config)
+- **Snapshot Conversion**: Converts EXR to PNG with filmic tone mapping
 - **Snapshot Organization**: Moves and renames snapshots to project structure
+- **Hierarchy→Layers**: Syncs object manager nulls with layer manager (creates/links layers)
+- **Unique Layer Colors**: Each layer gets a distinct random color for easy identification
+- **Drop to Floor**: Accurately positions objects at Y=0, handles rotation and hierarchy
+- **Plugin Icon**: Custom YS Guardian icon displays in Extensions menu
+- **Flexible Preset Names**: Accepts "pre_render", "pre-render", "Pre-Render" (case-insensitive)
 
 ### What Doesn't Work ❌
 - **Forcing Redshift Snapshot Directory**: Can't override Redshift's save location at runtime
 - **Programmatic Snapshot Triggering**: No API access to trigger snapshots from code
 
-### Redshift Snapshot Problem ⚠️
-**Discovery**: Redshift saves snapshots as .rssnap2 files in `C:\Users\[username]\AppData\Local\Temp\snapshots`
-**Format Issue**: .rssnap2 is a proprietary format that appears to be encrypted or specially encoded
-**Analysis Results**:
-- Files contain real image data (entropy ~5.6/8.0)
-- Not standard image formats (not DDS, KTX, PVR)
-- Not compressed with standard algorithms (zlib, gzip, lzma)
-- Contains float32-like patterns but values are corrupted/encrypted
-**Current Status**: Can detect .rssnap2 files but cannot convert them to viewable images
-**Workaround**: Users must use Redshift's own tools to export snapshots as standard image formats
+### Redshift Snapshot Setup Required ⚙️
+**Solution**: Redshift RenderView must be configured to save snapshots as EXR format
+**Setup Steps**:
+1. Open Redshift RenderView
+2. Click Preferences (gear icon) → Snapshots → Configuration
+3. Set path: `C:/cache/rs snapshots`
+4. Enable "Save snapshots as EXR" (not .rssnap2)
+5. Click OK
+
+**Current Status**: Works perfectly when configured correctly
+**Note**: The installer creates the cache directory and shows these instructions automatically
 
 ## Active Tasks
 Check the `tasks/` folder for current development tasks and priorities.
@@ -99,6 +105,38 @@ Check the `tasks/` folder for current development tasks and priorities.
 
 ## Keep It Simple
 The plugin should do what it can do well, and clearly communicate its limitations.
+
+## Recent Improvements (v1.0 - October 2024)
+
+### Drop to Floor Enhancement
+- Fixed rotation handling: now calculates global bounding box correctly
+- Fixed hierarchy handling: works with nested objects
+- Uses object cache for accurate geometry bounds
+- Supports rotated, scaled, and grouped objects
+
+### Layer Colors
+- Each layer gets a unique random color based on name hash
+- Colors are visually distinct using golden ratio distribution
+- Same layer name = same color (consistent across sessions)
+- Pleasant, bright colors (60% saturation, 95% brightness)
+
+### Plugin Icon Integration
+- Custom YS Guardian icon (32x32 PNG with alpha)
+- Displays in Extensions menu and Plugin Manager
+- Automatically installed by batch installer
+- Path: `icons/ys-logo-alpha-32.png`
+
+### Preset Name Flexibility
+- Case-insensitive preset matching
+- Accepts hyphens, underscores, or spaces: "pre-render", "pre_render", "Pre Render"
+- UI displays readable names, internal system normalizes them
+- No more preset naming errors!
+
+### Redshift Snapshot Workflow
+- Installer creates `C:\cache\rs snapshots` directory automatically
+- Installer displays setup instructions for Redshift configuration
+- Plugin Info dialog includes step-by-step Redshift setup
+- README updated with clear configuration requirements
 
 ## Installation Batch File Maintenance ⚠️
 
@@ -124,6 +162,7 @@ The plugin should do what it can do well, and clearly communicate its limitation
 - [ ] All 5 quality checks function correctly
 - [ ] Icons display properly in Quality Check Status
 - [ ] All Quick Action buttons work (8 buttons total in 4x4 grid)
+- [ ] Select buttons work for each quality check (Lights, Visibility, Keyframes, Cameras)
 - [ ] Drop to Floor functionality works with selected objects
 - [ ] Rounded corners render on status bars
 - [ ] Info dialog shows clean formatting (no ====)
@@ -152,9 +191,9 @@ The plugin should do what it can do well, and clearly communicate its limitation
 ├─────────────────────────────────────┤
 │ Quick Actions (4x4 grid)             │
 │ [Select Lights] [Select Visibility] │
-│ [Select Keys]   [Select Cameras]    │
-│ [Vibrate Null]  [Basic Cam Rig]     │
-│ [Drop to Floor] [Plugin Info]       │
+│ [Select Keyframes] [Select Cameras] │
+│ [Vibrate Null]    [Basic Cam Rig]   │
+│ [Drop to Floor]   [Plugin Info]     │
 ├─────────────────────────────────────┤
 │ Stills Management                    │
 │ [Open Folder]   [Save Still]        │

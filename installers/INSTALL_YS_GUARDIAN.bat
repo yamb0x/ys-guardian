@@ -7,16 +7,14 @@ echo     Cinema 4D 2024 Quality Control Plugin
 echo =========================================================
 echo.
 echo     Features:
-echo     - 5 Real-time quality checks with visual status icons
-echo     - Icons display in warning messages when issues detected
-echo     - Rounded corners on quality check status bars
-echo     - NEW: Render Preset tabs (Previz, Pre-Render, Render, Stills)
-echo     - NEW: Force Settings button (standard resolutions at 25fps)
-echo     - NEW: Force Vertical button (9:16 aspect for reels/stories)
-echo     - NEW: Active Watchers as tab buttons (not checkboxes)
-echo     - NEW: Mute All button to hide all quality checks
+echo     - 5 Real-time quality checks with color-coded status
+echo     - Render Preset tabs (Previz, Pre-Render, Render, Stills)
+echo     - Force Settings button (standard resolutions at 25fps)
+echo     - Force Vertical button (9:16 aspect for reels/stories)
+echo     - Active Watchers as tab buttons
+echo     - Mute All button to hide all quality checks
 echo     - Modernized Monitoring Controls with clean tab design
-echo     - 4x4 Quick Actions grid with tools:
+echo     - Quick Actions grid with tools:
 echo       * Select Lights / Visibility / Keyframes / Cameras
 echo       * Vibrate Null creation
 echo       * Basic Camera Rig setup
@@ -36,11 +34,11 @@ pause
 REM Get the project root directory (parent of installers folder)
 set PROJECT_ROOT=%~dp0..
 set PLUGIN_DIR=%PROJECT_ROOT%\plugin
-set ICONS_DIR=%PROJECT_ROOT%\icons
 set C4D_DIR=%PROJECT_ROOT%\c4d
+set ICONS_DIR=%PROJECT_ROOT%\icons
 set DEST_DIR=C:\Program Files\Maxon Cinema 4D 2024\plugins\YS_Guardian
-set DEST_ICONS_DIR=%DEST_DIR%\icons
 set DEST_C4D_DIR=%DEST_DIR%\c4d
+set DEST_ICONS_DIR=%DEST_DIR%\icons
 
 REM Check if running as administrator
 net session >nul 2>&1
@@ -106,33 +104,7 @@ copy /Y "%PLUGIN_DIR%\exr_converter_external.py" "%DEST_DIR%\exr_converter_exter
 if %errorlevel% equ 0 (echo [OK] External converter with ACES support) else (echo [FAILED] External converter)
 
 echo.
-echo Step 3: Installing UI icons...
-echo ----------------------------------------
-
-REM Create icons directory
-if not exist "%DEST_ICONS_DIR%" (
-    mkdir "%DEST_ICONS_DIR%"
-    echo [OK] Created icons directory
-)
-
-REM Copy icon files
-set ICON_COUNT=0
-for %%F in ("%ICONS_DIR%\*.tif" "%ICONS_DIR%\*.png" "%ICONS_DIR%\*.svg") do (
-    if exist "%%F" (
-        copy /Y "%%F" "%DEST_ICONS_DIR%\" >nul 2>&1
-        set /a ICON_COUNT+=1
-    )
-)
-
-if !ICON_COUNT! gtr 0 (
-    echo [OK] Installed !ICON_COUNT! icon files
-) else (
-    echo [WARNING] No icon files found - UI icons will not display
-    echo          Expected location: %ICONS_DIR%
-)
-
-echo.
-echo Step 3a: Installing C4D asset files...
+echo Step 3: Installing C4D asset files...
 echo ----------------------------------------
 
 REM Create c4d directory in destination
@@ -155,6 +127,29 @@ if exist "%C4D_DIR%\VibrateNull.c4d" (
 )
 
 echo.
+echo Installing plugin icon...
+echo ----------------------------------------
+
+REM Create icons directory in destination
+if not exist "%DEST_ICONS_DIR%" (
+    mkdir "%DEST_ICONS_DIR%"
+    echo [OK] Created icons directory
+)
+
+REM Copy plugin icon (PNG format for best C4D compatibility)
+if exist "%ICONS_DIR%\ys-logo-alpha-32.png" (
+    copy /Y "%ICONS_DIR%\ys-logo-alpha-32.png" "%DEST_ICONS_DIR%\ys-logo-alpha-32.png" >nul
+    if %errorlevel% equ 0 (
+        echo [OK] Copied plugin icon (PNG)
+    ) else (
+        echo [WARNING] Failed to copy plugin icon
+    )
+) else (
+    echo [WARNING] Plugin icon not found
+    echo          Expected: %ICONS_DIR%\ys-logo-alpha-32.png
+)
+
+echo.
 echo Step 4: Creating output directory structure...
 echo ----------------------------------------
 if not exist "C:\YS_Guardian_Output" (
@@ -167,6 +162,15 @@ if not exist "C:\YS_Guardian_Output" (
     echo [OK] Log file created
 ) else (
     echo Directory exists: C:\YS_Guardian_Output
+)
+
+echo.
+echo Creating Redshift snapshot cache directory...
+if not exist "C:\cache\rs snapshots" (
+    mkdir "C:\cache\rs snapshots"
+    echo Created: C:\cache\rs snapshots
+) else (
+    echo Directory exists: C:\cache\rs snapshots
 )
 
 echo.
@@ -262,20 +266,18 @@ if exist "%DEST_DIR%\ys_guardian_panel.pyp" (
     echo     %DEST_DIR%
 )
 
-REM Verify icons installation
-set ICONS_OK=0
-if exist "%DEST_ICONS_DIR%\lights outside icon.tif" set /a ICONS_OK+=1
-if exist "%DEST_ICONS_DIR%\visability trap icon.tif" set /a ICONS_OK+=1
-if exist "%DEST_ICONS_DIR%\keyframe sanity icon.tif" set /a ICONS_OK+=1
-if exist "%DEST_ICONS_DIR%\camera with non zero shift icon.tif" set /a ICONS_OK+=1
-if exist "%DEST_ICONS_DIR%\render preset conlfict icon.tif" set /a ICONS_OK+=1
-
-if !ICONS_OK! geq 5 (
-    echo [✓] UI icons installed (!ICONS_OK! status icons found)
+if exist "%DEST_ICONS_DIR%\ys-logo-alpha-32.png" (
+    echo [✓] Plugin icon installed (PNG)
 ) else (
-    echo [✗] WARNING: Some icons missing (!ICONS_OK!/5 found)
-    echo     Icons may not display properly in the plugin
+    echo [!] Plugin icon missing (plugin will work without it)
 )
+
+if exist "%DEST_C4D_DIR%\VibrateNull.c4d" (
+    echo [✓] VibrateNull asset installed
+) else (
+    echo [!] VibrateNull asset missing
+)
+
 echo.
 echo Output directory:
 echo   C:\YS_Guardian_Output\
@@ -311,6 +313,19 @@ echo TEST CONVERTER:
 echo ---------------
 echo To test EXR conversion:
 echo   python "%DEST_DIR%\test_converter.py" your_file.exr
+echo.
+echo REDSHIFT SNAPSHOT SETUP (REQUIRED):
+echo -------------------------------------
+echo For Save Still to work, configure Redshift RenderView:
+echo   1. Open Redshift RenderView
+echo   2. Click Preferences (gear icon) -^> Snapshots
+echo   3. Configuration tab:
+echo      - Set path: C:/cache/rs snapshots
+echo      - Enable "Save snapshots as EXR"
+echo      - Click OK
+echo.
+echo Opening snapshot cache folder for you...
+start "" "C:\cache\rs snapshots"
 echo.
 echo UNINSTALLATION:
 echo ---------------
