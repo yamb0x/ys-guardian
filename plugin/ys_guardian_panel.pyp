@@ -220,13 +220,13 @@ def _is_light_obj(op):
     return is_light
 
 def check_lights(doc):
-    """Check for lights outside proper containers"""
+    """Check for lights outside proper containers - accepts 'light', 'lights', or 'lighting'"""
     cached = check_cache.get(doc, "lights")
     if cached is not None:
         return cached
 
     offenders = []
-    names = {"lights", "lighting"}
+    names = {"light", "lights", "lighting"}
     first = doc.GetFirstObject()
 
     if not first:
