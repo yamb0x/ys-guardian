@@ -4,11 +4,8 @@ from c4d import plugins, gui, documents
 import os
 import json
 import time
-import subprocess
 import sys
 import webbrowser
-from pathlib import Path
-from datetime import datetime
 import threading
 from collections import defaultdict
 
@@ -45,7 +42,7 @@ def normalize_preset_name(name):
 
 # Performance settings for watcher
 MAX_OBJECTS_PER_CHECK = 1000  # Process in chunks
-CACHE_DURATION = 0.5  # Cache results for 500ms
+CACHE_DURATION = 2.0  # Cache results for 2 seconds (optimized for performance)
 CHECK_COOLDOWN = 0.1  # Minimum time between checks
 
 # Global settings file for artist name
@@ -57,8 +54,8 @@ def safe_print(msg):
     try:
         if msg is not None:
             print(f"[YS Guardian] {msg}")
-    except:
-        pass
+    except (UnicodeEncodeError, AttributeError):
+        pass  # Print failed, continue silently
 
 # ---------------- Artist Name Persistence ----------------
 class GlobalSettings:
@@ -114,6 +111,7 @@ class CheckCache:
         self.cache = {}
         self.last_update = 0
         self.doc_id = None
+        self.ancestor_vis_cache = {}  # Persistent ancestor visibility cache
 
     def get(self, doc, key):
         doc_id = id(doc)
@@ -130,8 +128,21 @@ class CheckCache:
         self.cache[key] = value
         self.last_update = time.time()
 
+    def get_ancestor_visibility(self, obj):
+        """Get cached ancestor visibility or calculate and cache"""
+        obj_id = id(obj)
+        if obj_id in self.ancestor_vis_cache:
+            return self.ancestor_vis_cache[obj_id]
+        return None
+
+    def set_ancestor_visibility(self, obj, vis_tuple):
+        """Cache ancestor visibility for object"""
+        obj_id = id(obj)
+        self.ancestor_vis_cache[obj_id] = vis_tuple
+
     def clear(self):
         self.cache.clear()
+        self.ancestor_vis_cache.clear()
         self.doc_id = None
 
 # Global cache instance
@@ -284,9 +295,7 @@ def check_visibility_traps(doc):
             return c4d.OBJECT_ON
 
     try:
-        # Build parent visibility map for optimization
-        parent_vis = {}
-
+        # Performance optimization: Use persistent ancestor visibility cache
         for o in _iter_objs(first, MAX_OBJECTS_PER_CHECK):
             if not o:
                 continue
@@ -301,15 +310,16 @@ def check_visibility_traps(doc):
                     traps.append(o)
                     continue
 
-                # Check ancestor visibility
+                # Check ancestor visibility using persistent cache
                 p = o.GetUp()
                 if p:
-                    parent_id = id(p)
+                    # Try persistent cache first
+                    cached_vis = check_cache.get_ancestor_visibility(p)
 
-                    # Use cached parent visibility if available
-                    if parent_id in parent_vis:
-                        ancE, ancR = parent_vis[parent_id]
+                    if cached_vis is not None:
+                        ancE, ancR = cached_vis
                     else:
+                        # Calculate ancestor visibility and cache it
                         ancE = False
                         ancR = False
                         temp_p = p
@@ -323,7 +333,8 @@ def check_visibility_traps(doc):
                             temp_p = temp_p.GetUp()
                             depth += 1
 
-                        parent_vis[parent_id] = (ancE, ancR)
+                        # Store in persistent cache for reuse across timer ticks
+                        check_cache.set_ancestor_visibility(p, (ancE, ancR))
 
                     if (ancE and ed_vis == c4d.OBJECT_ON) or (ancR and rd_vis == c4d.OBJECT_ON):
                         traps.append(o)
@@ -798,8 +809,10 @@ class G:
 
     # New Quick Action buttons
     BTN_VIBRATE_NULL = 1120
-    BTN_CAM_RIG = 1121
     BTN_DROP_TO_FLOOR = 1122  # Drop to Floor functionality
+    BTN_CAM_SIMPLE = 1123  # Simple camera setup
+    BTN_CAM_SHAKEL = 1124  # Shakel camera setup
+    BTN_CAM_PATH = 1125  # Path camera setup
     BTN_PLACEHOLDER = 1109  # Fourth button placeholder
 
     # Render preset tab buttons
@@ -820,8 +833,9 @@ class G:
     # Monitoring control buttons
     BTN_MUTE_ALL = 1305
 
-    # GitHub link button
+    # GitHub and Bug Report buttons
     BTN_GITHUB = 1306
+    BTN_BUG_REPORT = 1307
 
 class YSPanel(gui.GeDialog):
     def __init__(self):
@@ -917,6 +931,7 @@ class YSPanel(gui.GeDialog):
                 normalized_rd = normalize_preset_name(rd.GetName() or "")
                 if normalized_rd == normalized_target:
                     doc.SetActiveRenderData(rd)
+                    check_cache.clear()  # Clear cache to update compliance check immediately
                     c4d.EventAdd()
                     self._active_preset = normalized_target
                     self._update_preset_buttons()
@@ -1111,20 +1126,30 @@ class YSPanel(gui.GeDialog):
         self.AddStaticText(0,0,0,0,"Quick Actions",0)
         self.AddSeparatorH(5)
 
-        # First row - Workflow automation buttons
-        self.GroupBegin(51, c4d.BFH_SCALEFIT, 4, 0)
+        # First row - Hierarchy and Solo
+        self.GroupBegin(51, c4d.BFH_SCALEFIT, 2, 0)
         self.AddButton(G.BTN_A,c4d.BFH_SCALEFIT,0,0,"Hierarchy→Layers")
         self.AddButton(G.BTN_B,c4d.BFH_SCALEFIT,0,0,"Solo Layers")
+        self.GroupEnd()
+
+        # Second row - Search and ChatGPT
+        self.GroupBegin(52, c4d.BFH_SCALEFIT, 2, 0)
         self.AddButton(G.BTN_C,c4d.BFH_SCALEFIT,0,0,"Search 3D Model")
         self.AddButton(G.BTN_D,c4d.BFH_SCALEFIT,0,0,"Ask ChatGPT")
         self.GroupEnd()
 
-        # Second row - Additional tools
-        self.GroupBegin(52, c4d.BFH_SCALEFIT, 4, 0)
+        # Third row - Additional tools
+        self.GroupBegin(53, c4d.BFH_SCALEFIT, 3, 0)
         self.AddButton(G.BTN_VIBRATE_NULL,c4d.BFH_SCALEFIT,0,0,"Vibrate Null")
-        self.AddButton(G.BTN_CAM_RIG,c4d.BFH_SCALEFIT,0,0,"Basic Cam Rig")
         self.AddButton(G.BTN_DROP_TO_FLOOR,c4d.BFH_SCALEFIT,0,0,"Drop to Floor")
-        self.AddButton(G.BTN_INFO, c4d.BFH_SCALEFIT, 0, 0, "Plugin Info & Checks")
+        self.AddButton(G.BTN_INFO, c4d.BFH_SCALEFIT, 0, 0, "Plugin Info")
+        self.GroupEnd()
+
+        # Fourth row - Camera setups
+        self.GroupBegin(54, c4d.BFH_SCALEFIT, 3, 0)
+        self.AddButton(G.BTN_CAM_SIMPLE,c4d.BFH_SCALEFIT,0,0,"Cam: Simple")
+        self.AddButton(G.BTN_CAM_SHAKEL,c4d.BFH_SCALEFIT,0,0,"Cam: Shakel")
+        self.AddButton(G.BTN_CAM_PATH,c4d.BFH_SCALEFIT,0,0,"Cam: Path")
         self.GroupEnd()
 
         self.GroupEnd()
@@ -1141,17 +1166,18 @@ class YSPanel(gui.GeDialog):
         self.AddButton(G.BTN_SNAPSHOT, c4d.BFH_SCALEFIT, 0, 0, "Save Still")
         self.GroupEnd()
 
-        # Add GitHub button with link arrow (↗)
+        # Add GitHub and Bug Report buttons
         self.AddSeparatorH(8)
-        self.GroupBegin(62, c4d.BFH_SCALEFIT, 1, 0)
+        self.GroupBegin(62, c4d.BFH_SCALEFIT, 2, 0)
         self.AddButton(G.BTN_GITHUB, c4d.BFH_SCALEFIT, 0, 0, "View on GitHub ↗")
+        self.AddButton(G.BTN_BUG_REPORT, c4d.BFH_SCALEFIT, 0, 0, "Report Bug ↗")
         self.GroupEnd()
 
         self.GroupEnd()
 
         self.GroupEnd()  # Main container end
 
-        self.SetTimer(500)
+        self.SetTimer(1500)  # Optimized: 1.5 seconds (was 500ms) - quality checks don't need sub-second updates
         return True
 
     def InitValues(self):
@@ -1182,6 +1208,10 @@ class YSPanel(gui.GeDialog):
         return True
 
     def Timer(self, msg):
+        # Performance optimization: Skip all work when all watchers are muted
+        if self._all_muted:
+            return True
+
         doc = c4d.documents.GetActiveDocument()
 
         # Document change detection
@@ -1265,8 +1295,14 @@ class YSPanel(gui.GeDialog):
         elif cid == G.BTN_VIBRATE_NULL:
             self._create_vibrate_null(doc)
 
-        elif cid == G.BTN_CAM_RIG:
-            self._create_basic_cam_rig(doc)
+        elif cid == G.BTN_CAM_SIMPLE:
+            self._merge_camera_file(doc, "cam_simple.c4d")
+
+        elif cid == G.BTN_CAM_SHAKEL:
+            self._merge_camera_file(doc, "cam_w_shakel.c4d")
+
+        elif cid == G.BTN_CAM_PATH:
+            self._merge_camera_file(doc, "cam_path.c4d")
 
         elif cid == G.BTN_DROP_TO_FLOOR:
             self._drop_to_floor(doc)
@@ -1285,10 +1321,15 @@ class YSPanel(gui.GeDialog):
 
         elif cid == G.BTN_GITHUB:
             # Open GitHub repository
-            import webbrowser
             github_url = "https://github.com/yamb0x/ys-guardian"
             webbrowser.open(github_url)
             safe_print(f"Opening GitHub repository: {github_url}")
+
+        elif cid == G.BTN_BUG_REPORT:
+            # Open GitHub issues page for bug reports
+            bug_url = "https://github.com/yamb0x/ys-guardian/issues/new"
+            webbrowser.open(bug_url)
+            safe_print(f"Opening bug report page: {bug_url}")
 
         elif cid == G.SEL_LIGHTS:
             if hasattr(self, '_lights_bad') and self._lights_bad:
@@ -1368,6 +1409,36 @@ class YSPanel(gui.GeDialog):
             safe_print(f"Error merging vibrate null: {e}")
             c4d.gui.MessageDialog(f"Error loading vibrate null: {e}")
 
+    def _merge_camera_file(self, doc, filename):
+        """Merge camera setup from C4D file"""
+        if not doc:
+            return
+
+        try:
+            # Get path to the C4D file (in the same plugin directory)
+            plugin_dir = os.path.dirname(__file__)
+            c4d_file = os.path.join(plugin_dir, "c4d", filename)
+
+            # Check if file exists
+            if not os.path.exists(c4d_file):
+                safe_print(f"{filename} not found at: {c4d_file}")
+                c4d.gui.MessageDialog(f"{filename} file not found in c4d folder")
+                return
+
+            # Merge the C4D file into the current document
+            merge_doc = c4d.documents.MergeDocument(doc, c4d_file, c4d.SCENEFILTER_OBJECTS | c4d.SCENEFILTER_MATERIALS)
+
+            if merge_doc:
+                c4d.EventAdd()
+                camera_name = filename.replace(".c4d", "").replace("cam_", "").replace("_", " ").title()
+                safe_print(f"Merged {camera_name} camera setup from {filename}")
+            else:
+                safe_print(f"Failed to merge {filename}")
+
+        except Exception as e:
+            safe_print(f"Error merging camera file {filename}: {e}")
+            c4d.gui.MessageDialog(f"Error loading camera setup: {e}")
+
     def _force_render_settings(self, doc):
         """Force apply render settings based on active preset"""
         if not doc:
@@ -1381,9 +1452,9 @@ class YSPanel(gui.GeDialog):
             rd = doc.GetFirstRenderData()
             target_rd = None
 
-            # Search for existing preset
+            # Search for existing preset (using normalized comparison)
             while rd:
-                if (rd.GetName() or "").strip().lower() == preset_name:
+                if normalize_preset_name(rd.GetName() or "") == normalize_preset_name(preset_name):
                     target_rd = rd
                     break
                 rd = rd.GetNext()
@@ -1427,6 +1498,7 @@ class YSPanel(gui.GeDialog):
 
             # Set as active
             doc.SetActiveRenderData(target_rd)
+            check_cache.clear()  # Clear cache to update compliance check immediately
             c4d.EventAdd()
 
             c4d.gui.MessageDialog(f"Applied standard settings for '{preset_name}' preset\n\n"
@@ -1467,15 +1539,14 @@ class YSPanel(gui.GeDialog):
             rd = doc.GetFirstRenderData()
 
             while rd:
-                preset_name = (rd.GetName() or "").strip().lower()
+                preset_name = normalize_preset_name(rd.GetName() or "")
 
                 if preset_name in vertical_presets:
                     preset_data = vertical_presets[preset_name]
                     width, height = preset_data["resolution"]
-                    # Set vertical resolution
+                    # Set vertical resolution (9:16 aspect ratio)
                     rd[c4d.RDATA_XRES] = width
                     rd[c4d.RDATA_YRES] = height
-                    rd[c4d.RDATA_FRAMERATE] = 25
                     # Set output path
                     rd[c4d.RDATA_PATH] = preset_data["path"]
                     changed_count += 1
@@ -1483,6 +1554,7 @@ class YSPanel(gui.GeDialog):
 
                 rd = rd.GetNext()
 
+            check_cache.clear()  # Clear cache to update compliance check immediately
             c4d.EventAdd()
 
             if changed_count > 0:
@@ -1492,45 +1564,13 @@ class YSPanel(gui.GeDialog):
                                      f"• Pre-Render: 1080×1920\n"
                                      f"• Render: 1080×1920\n"
                                      f"• Stills: 2160×3840\n\n"
-                                     f"All at 25 fps for social media")
+                                     f"Output paths verified and set.")
             else:
                 c4d.gui.MessageDialog("No standard render presets found to update.\n"
                                      "Create presets named: previz, pre_render, render, or stills")
 
         except Exception as e:
             safe_print(f"Error forcing vertical aspect: {e}")
-
-    def _create_basic_cam_rig(self, doc):
-        """Create a basic camera rig with null parent"""
-        if not doc:
-            return
-
-        # Create camera
-        camera = c4d.BaseObject(c4d.Ocamera)
-        camera.SetName("Camera")
-
-        # Create null parent
-        camera_null = c4d.BaseObject(c4d.Onull)
-        camera_null.SetName("Camera_Rig")
-
-        # Set camera as child of null
-        camera.InsertUnder(camera_null)
-
-        # Set camera position (offset from null)
-        camera[c4d.ID_BASEOBJECT_REL_POSITION] = c4d.Vector(0, 0, -400)
-
-        # Insert into document
-        doc.InsertObject(camera_null)
-        doc.SetActiveObject(camera_null, c4d.SELECTION_NEW)
-
-        # Set as active camera
-        bd = doc.GetRenderBaseDraw()
-        if bd:
-            bd.SetSceneCamera(camera)
-
-        c4d.EventAdd()
-
-        safe_print("Created basic camera rig")
 
     def _hierarchy_to_layers(self, doc):
         """Link main project nulls and their children to layers with matching names"""

@@ -75,6 +75,7 @@ Additional features include Shot ID management, Render Preset selection, Artist 
 - **Drop to Floor**: Accurately positions objects at Y=0, handles rotation and hierarchy
 - **Plugin Icon**: Custom YS Guardian icon displays in Extensions menu
 - **Flexible Preset Names**: Accepts "pre_render", "pre-render", "Pre-Render" (case-insensitive)
+- **Camera Setups**: Three pre-configured camera rigs (Simple, Shakel, Path) - one-click merge into scene
 
 ### What Doesn't Work ❌
 - **Forcing Redshift Snapshot Directory**: Can't override Redshift's save location at runtime
@@ -189,11 +190,11 @@ The plugin should do what it can do well, and clearly communicate its limitation
 │ ╭─[📷] Cameras: 0 [OK]─────────────╮│
 │ ╭─[📋] Presets: 0 [OK]─────────────╮│
 ├─────────────────────────────────────┤
-│ Quick Actions (4x4 grid)             │
-│ [Select Lights] [Select Visibility] │
-│ [Select Keyframes] [Select Cameras] │
-│ [Vibrate Null]    [Basic Cam Rig]   │
-│ [Drop to Floor]   [Plugin Info]     │
+│ Quick Actions                        │
+│ [Hierarchy→Layers (2x)] [Solo (2x)] │
+│ [Search 3D Model]  [Ask ChatGPT]    │
+│ [Vibrate Null] [Cam Rig] [Drop] [?] │
+│ [Cam: Simple] [Cam: Shakel] [Path]  │
 ├─────────────────────────────────────┤
 │ Stills Management                    │
 │ [Open Folder]   [Save Still]        │

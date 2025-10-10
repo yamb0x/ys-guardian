@@ -33,23 +33,32 @@ class RedshiftSnapshotConfig:
     def get_scene_snapshot_dir(doc, artist_name):
         """
         Get the organized snapshot directory for the current scene
-        Creates a structure like: project_path/Output/artist_name/YYMMDD/
+        Creates a structure like: project_root/output/stills/artist_name/YYMMDD/
+
+        Goes 2 levels up from C4D file location to reach project root:
+        c4d/_Shots/file.c4d -> project_root/output/stills/Artist/YYMMDD/
         """
         try:
-            # Get project path from document
-            project_path = doc.GetDocumentPath()
-            print(f"Document path from C4D: {project_path}")
+            # Get C4D file location
+            c4d_file_path = doc.GetDocumentPath()
+            print(f"C4D file path: {c4d_file_path}")
 
-            if not project_path or project_path == "":
+            if not c4d_file_path or c4d_file_path == "":
                 # Fall back to default location
-                project_path = r"C:\YS_Guardian_Output"
-                print(f"Using fallback path: {project_path}")
+                project_root = r"C:\YS_Guardian_Output"
+                print(f"Using fallback path: {project_root}")
+            else:
+                # Go 2 levels up from C4D file location to get project root
+                # Example: D:\...\Island_Gartner_0925\c4d\_Shots\ -> D:\...\Island_Gartner_0925\
+                project_root = os.path.dirname(os.path.dirname(c4d_file_path))
+                print(f"Project root (2 levels up): {project_root}")
 
-            # Build the organized output path
+            # Build the organized output path: project_root/output/stills/Artist/YYMMDD/
             date_folder = datetime.now().strftime("%y%m%d")
             output_dir = os.path.join(
-                project_path,
-                "Output",
+                project_root,
+                "output",
+                "stills",
                 artist_name if artist_name else "Unknown",
                 date_folder
             )
@@ -70,8 +79,8 @@ class RedshiftSnapshotConfig:
                 os.makedirs(fallback_dir, exist_ok=True)
                 print(f"Using fallback directory: {fallback_dir}")
                 return fallback_dir
-            except:
-                return None
+            except (IOError, OSError):
+                return None  # Failed to create fallback directory
 
 
 class RedshiftSnapshotManager:
@@ -106,8 +115,8 @@ class RedshiftSnapshotManager:
         try:
             with open(self.log_file, 'a') as f:
                 f.write(f"[{datetime.now().strftime('%H:%M:%S')}] {message}\n")
-        except:
-            pass  # Fail silently if logging fails
+        except (IOError, OSError):
+            pass  # Log file not accessible, continue anyway
 
     def find_latest_exr(self):
         """Find the most recent EXR file in the Redshift snapshot directory"""
@@ -264,8 +273,8 @@ class RedshiftSnapshotManager:
                 try:
                     os.remove(file_path)
                     self._log(f"Deleted old EXR: {os.path.basename(file_path)}")
-                except:
-                    pass
+                except (IOError, OSError, PermissionError):
+                    pass  # File deletion failed, continue anyway
 
         except Exception as e:
             self._log(f"Error cleaning up old files: {e}")
