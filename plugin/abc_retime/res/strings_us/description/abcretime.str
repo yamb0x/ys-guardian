@@ -1,0 +1,15 @@
+STRINGTABLE abcretime
+{
+	abcretime								"Alembic Retime";
+
+	ABC_START_FRAME							"Cache Start Frame";
+	ABC_OFFSET								"Playback Offset";
+	ABC_SPEED 								"Playback Speed";
+	ABC_START_FROM_DOC						"Start Frame from Document";
+	ABC_APPLY_CHILDREN						"Apply to Children";
+	ABC_RESET_CHILDREN						"Reset Children's Animation Mode";
+	ABC_RETIME_TYPE							"Retime Using Frame Number";
+	ABC_FRAME								"Cache Frame";
+	ABC_IMPORT_RETIME_CLIPBOARD				"Import Retime from Clipboard";
+	ABC_IMPORT_RETIME_FILE					"Import Retime from File";
+}

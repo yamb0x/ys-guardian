@@ -779,7 +779,7 @@ class G:
     CANVAS = 1008
     BTN_SNAPSHOT = 1009
     BTN_OPEN_FOLDER = 1010
-    BTN_INFO = 1020
+    BTN_ABC_RETIME = 1020
 
     SHOW_L = 1011
     SHOW_V = 1014
@@ -1142,7 +1142,7 @@ class YSPanel(gui.GeDialog):
         self.GroupBegin(53, c4d.BFH_SCALEFIT, 3, 0)
         self.AddButton(G.BTN_VIBRATE_NULL,c4d.BFH_SCALEFIT,0,0,"Vibrate Null")
         self.AddButton(G.BTN_DROP_TO_FLOOR,c4d.BFH_SCALEFIT,0,0,"Drop to Floor")
-        self.AddButton(G.BTN_INFO, c4d.BFH_SCALEFIT, 0, 0, "Plugin Info")
+        self.AddButton(G.BTN_ABC_RETIME, c4d.BFH_SCALEFIT, 0, 0, "ABC Retime")
         self.GroupEnd()
 
         # Fourth row - Camera setups
@@ -1210,7 +1210,7 @@ class YSPanel(gui.GeDialog):
     def Timer(self, msg):
         # Performance optimization: Skip all work when all watchers are muted
         if self._all_muted:
-            return True
+            return
 
         doc = c4d.documents.GetActiveDocument()
 
@@ -1224,8 +1224,6 @@ class YSPanel(gui.GeDialog):
         # Live updates
         if self.GetBool(G.LIVE):
             self._refresh()
-
-        return True
 
     def Command(self, cid, msg):
         doc = c4d.documents.GetActiveDocument()
@@ -1289,8 +1287,8 @@ class YSPanel(gui.GeDialog):
         elif cid == G.BTN_OPEN_FOLDER:
             self._open_artist_folder()
 
-        elif cid == G.BTN_INFO:
-            self._show_info_dialog()
+        elif cid == G.BTN_ABC_RETIME:
+            self._apply_abc_retime_tag()
 
         elif cid == G.BTN_VIBRATE_NULL:
             self._create_vibrate_null(doc)
@@ -2189,135 +2187,49 @@ The script I am interested to build is: """ + user_prompt
 
         _snapshot_handler.take_snapshot(doc, self._artist_name)
 
-    def _show_info_dialog(self):
-        """Show plugin info and debugging information for team support"""
-        doc = c4d.documents.GetActiveDocument()
-        info = []
-        info.append("YS GUARDIAN v1.0 - PLUGIN INFO")
-        info.append("")
+    def _apply_abc_retime_tag(self):
+        """Apply ABC Retime tag to selected object(s)"""
+        doc = documents.GetActiveDocument()
+        if not doc:
+            c4d.gui.MessageDialog("No active document")
+            return
 
-        # System diagnostics for team debugging
-        info.append("SYSTEM CHECKS:")
-        info.append("")
+        selection = doc.GetActiveObjects(c4d.GETACTIVEOBJECTFLAGS_CHILDREN)
+        if not selection:
+            c4d.gui.MessageDialog("Please select an object first\n\n(Works with Alembic, Point Cache, Mograph Cache, or X-Particles Cache objects)")
+            return
 
-        # Cinema 4D version
-        try:
-            c4d_version = c4d.GetC4DVersion()
-            info.append(f"[OK] Cinema 4D version: {c4d_version}")
-        except:
-            info.append("[WARN] Could not detect C4D version")
+        # ABC Retime plugin ID
+        ABC_RETIME_TAG_ID = 1058910
 
-        # Plugin installation path
-        plugin_dir = os.path.dirname(__file__)
-        info.append(f"[OK] Plugin location: {plugin_dir}")
+        applied_count = 0
+        skipped_count = 0
+        failed_count = 0
 
-        # Check snapshot system
-        if SNAPSHOT_AVAILABLE:
-            info.append("[OK] Snapshot system modules loaded")
-        else:
-            info.append("[FAIL] Snapshot modules not available")
-            info.append("       Contact support with this error")
+        for obj in selection:
+            # Check if tag already exists
+            existing_tag = obj.GetTag(ABC_RETIME_TAG_ID)
+            if existing_tag:
+                safe_print(f"ABC Retime tag already exists on {obj.GetName()}")
+                skipped_count += 1
+                continue
 
-        # Check EXR converter
-        if EXR_CONVERTER_AVAILABLE:
-            info.append(f"[OK] EXR converter available ({EXR_CONVERTER_METHOD})")
-        else:
-            info.append("[WARN] EXR converter not configured")
-            info.append("       System Python may not be available")
-
-        # Current document info
-        info.append("")
-        info.append("CURRENT SCENE:")
-        info.append("")
-        if doc:
-            doc_path = doc.GetDocumentPath()
-            doc_name = doc.GetDocumentName()
-            info.append(f"[OK] Document: {doc_name}")
-            if doc_path:
-                info.append(f"[OK] Path: {doc_path}")
+            # Apply the tag
+            tag = obj.MakeTag(ABC_RETIME_TAG_ID)
+            if tag:
+                applied_count += 1
+                safe_print(f"ABC Retime tag applied to {obj.GetName()}")
             else:
-                info.append("[WARN] Document not saved yet")
+                failed_count += 1
+                safe_print(f"Failed to apply ABC Retime tag to {obj.GetName()}")
 
-            # Count scene objects
-            obj_count = 0
-            op = doc.GetFirstObject()
-            def count_objects(op):
-                count = 0
-                while op:
-                    count += 1
-                    count += count_objects(op.GetDown())
-                    op = op.GetNext()
-                return count
-            obj_count = count_objects(op)
-            info.append(f"[OK] Scene objects: {obj_count}")
-        else:
-            info.append("[WARN] No active document")
+        # Update the scene
+        if applied_count > 0:
+            c4d.EventAdd()
 
-        # Check directories
-        info.append("")
-        info.append("DIRECTORIES:")
-        info.append("")
-
-        rs_dir = r"C:\cache\rs snapshots"
-        if os.path.exists(rs_dir):
-            try:
-                exr_count = len([f for f in os.listdir(rs_dir) if f.endswith('.exr')])
-                info.append(f"[OK] Redshift cache: {exr_count} EXR files")
-            except:
-                info.append("[OK] Redshift cache exists")
-        else:
-            info.append("[WARN] Redshift cache not found")
-            info.append(f"       Expected: {rs_dir}")
-
-        log_dir = r"C:\YS_Guardian_Output"
-        if os.path.exists(log_dir):
-            info.append("[OK] Log directory exists")
-        else:
-            info.append("[INFO] Log directory will be created on first use")
-
-        # Snapshot workflow and Redshift setup
-        info.append("")
-        info.append("REDSHIFT SNAPSHOT SETUP (REQUIRED):")
-        info.append("")
-        info.append("Configure Redshift RenderView first:")
-        info.append("1. Open Redshift RenderView")
-        info.append("2. Click Preferences (gear icon) -> Snapshots")
-        info.append("3. Configuration tab:")
-        info.append("   - Set path: C:/cache/rs snapshots")
-        info.append("   - Enable 'Save snapshots as EXR'")
-        info.append("   - Click OK")
-        info.append("")
-        info.append("SNAPSHOT WORKFLOW:")
-        info.append("")
-        info.append("1. Take snapshot in Redshift RenderView")
-        info.append("2. Click 'Save Still' in YS Guardian")
-        info.append("3. Output: Project/Output/[Artist]/[Date]/")
-        info.append("")
-
-        # Quality checks reference
-        info.append("QUALITY CHECKS:")
-        info.append("")
-        info.append("- Lights: Must be in 'lights' group")
-        info.append("- Visibility: No viewport/render mismatch")
-        info.append("- Keyframes: Warns about multi-axis keys")
-        info.append("- Cameras: No shift values allowed")
-        info.append("- Presets: Only approved render presets")
-        info.append("")
-
-        # Troubleshooting guide
-        info.append("TROUBLESHOOTING:")
-        info.append("")
-        info.append("If experiencing issues, report to team with:")
-        info.append("1. Screenshot of this dialog")
-        info.append("2. Description of the problem")
-        info.append("3. Steps to reproduce")
-        info.append("4. Cinema 4D Console output (Shift+F10)")
-        info.append("")
-        info.append("-" * 40)
-        info.append("Plugin by Yambo (C) 2025")
-
-        # Show the info dialog
-        c4d.gui.MessageDialog("\n".join(info))
+        # Show error message only if failed
+        if applied_count == 0 and skipped_count == 0:
+            c4d.gui.MessageDialog("ABC Retime tag could not be applied\n\nPossible reasons:\n- ABC Retime plugin not installed\n- Invalid object type\n\nManual access: Right-click Tags → Extensions → Alembic Retime")
 
     def DestroyWindow(self):
         """Clean up when panel closes"""
@@ -2411,29 +2323,29 @@ def Register():
         dat=YSPanelCmd()
     )
     if ok:
-        safe_print("Guardian panel v1.0 registered successfully")
+        safe_print("Guardian panel v1.0.1 registered successfully")
     else:
         safe_print("Failed to register Guardian panel")
     return ok
 
 if __name__ == "__main__":
-    # Print setup info
-    print(f"\n{'='*50}")
-    print(f"YS Guardian Panel v1.0 - Complete Edition")
-    print(f"{'='*50}")
+    # Print setup info using safe_print to avoid None returns in console
+    safe_print("\n" + "="*50)
+    safe_print("YS Guardian Panel v1.0.1 - Complete Edition")
+    safe_print("="*50)
 
     if SNAPSHOT_AVAILABLE and EXR_CONVERTER_AVAILABLE:
-        print(f"Snapshot Support: ENABLED")
-        print(f"  Converter: {EXR_CONVERTER_METHOD}")
-        print(f"  Tone Mapping: Filmic (cinematic quality)")
+        safe_print("Snapshot Support: ENABLED")
+        safe_print(f"  Converter: {EXR_CONVERTER_METHOD}")
+        safe_print("  Tone Mapping: ACES RRT/ODT (matches scene)")
     else:
-        print(f"Snapshot Support: DISABLED")
+        safe_print("Snapshot Support: DISABLED")
         if not SNAPSHOT_AVAILABLE:
-            print(f"  Missing dependencies for snapshot support")
+            safe_print("  Missing dependencies for snapshot support")
 
-    print(f"Watcher Status: ACTIVE")
-    print(f"  5 Quality Checks: Lights, Visibility, Keys, Camera, Render")
-    print(f"  Real-time Monitoring: Enabled")
-    print(f"{'='*50}\n")
+    safe_print("Watcher Status: ACTIVE")
+    safe_print("  5 Quality Checks: Lights, Visibility, Keys, Camera, Render")
+    safe_print("  Real-time Monitoring: Enabled")
+    safe_print("="*50 + "\n")
 
     Register()

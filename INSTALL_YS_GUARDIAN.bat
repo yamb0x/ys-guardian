@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion EnableExtensions
 
-REM YS Guardian Professional Installer v1.0
+REM YS Guardian Professional Installer v1.0.1
 REM This installer must be run as Administrator
 
 REM Keep window open after execution
@@ -14,7 +14,7 @@ REM =========================================================
 REM INITIALIZATION
 REM =========================================================
 
-set "VERSION=1.0"
+set "VERSION=1.0.1"
 set "INSTALL_DIR=%~dp0"
 set "LOG_FILE=%TEMP%\ys_guardian_install.log"
 set "PLUGIN_DIR=%INSTALL_DIR%plugin"
@@ -45,7 +45,8 @@ echo     - Force Vertical button (9:16 aspect for reels/stories)
 echo     - Active Watchers as tab buttons
 echo     - Mute All button to hide all quality checks
 echo     - Professional UI with consistent tab styling
-echo     - Quick Actions: Hierarchy to Layers, Solo Layers
+echo     - Quick Actions: Hierarchy to Layers, Solo Layers, ABC Retime
+echo     - ABC Retime plugin bundled (one-click tag application)
 echo     - 3 Camera setups: Simple, Shakel, Path (one-click merge)
 echo     - Redshift snapshot management (Save Still)
 echo     - ACES color-accurate EXR to PNG conversion
@@ -252,11 +253,40 @@ if exist "%ICONS_DIR%\ys-logo-alpha-32.png" (
 )
 
 REM =========================================================
+REM INSTALL ABC RETIME PLUGIN
+REM =========================================================
+
+echo.
+echo Step 5: Installing ABC Retime plugin...
+echo ----------------------------------------
+
+set "ABC_RETIME_SOURCE=%PLUGIN_DIR%\abc_retime"
+set "ABC_RETIME_DEST=C:\Program Files\Maxon Cinema 4D 2024\plugins\abc_retime"
+
+if exist "%ABC_RETIME_SOURCE%\main.pyp" (
+    if not exist "%ABC_RETIME_DEST%" mkdir "%ABC_RETIME_DEST%" 2>nul
+
+    xcopy /E /I /Y "%ABC_RETIME_SOURCE%" "%ABC_RETIME_DEST%" >nul 2>&1
+    if !errorlevel! equ 0 (
+        echo [OK] ABC Retime plugin installed
+        echo      Plugin ID: 1058910
+        echo      Access: Right-click Tags ^> Extensions ^> Alembic Retime
+    ) else (
+        echo [WARNING] Could not install ABC Retime plugin
+        echo           Snapshot and quality checks will still work
+    )
+) else (
+    echo [WARNING] ABC Retime source not found
+    echo           Expected: %ABC_RETIME_SOURCE%
+    echo           This is optional - main plugin will work without it
+)
+
+REM =========================================================
 REM CREATE OUTPUT DIRECTORIES
 REM =========================================================
 
 echo.
-echo Step 5: Creating output directories...
+echo Step 6: Creating output directories...
 echo ----------------------------------------
 
 if not exist "C:\YS_Guardian_Output" (
@@ -280,7 +310,7 @@ REM PYTHON DETECTION AND INSTALLATION
 REM =========================================================
 
 echo.
-echo Step 6: Checking Python installation...
+echo Step 7: Checking Python installation...
 echo ----------------------------------------
 
 call :CheckPython

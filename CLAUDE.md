@@ -13,9 +13,10 @@ The plugin performs **5 critical quality checks** in real-time:
 Additional features include Shot ID management, Render Preset selection, Artist name tracking, and (in development) Redshift RenderView snapshot capture.
 
 ## Core Files (DO NOT DELETE)
-- `ys_guardian_panel_v21_snapshot_fix.pyp` - Main plugin file
-- `redshift_snapshot_manager_simple.py` - Snapshot management logic
-- `redshift_command_listener.py` - Minimal command discovery
+- `ys_guardian_panel.pyp` - Main plugin file
+- `redshift_snapshot_manager_fixed.py` - Snapshot management logic
+- `exr_to_png_converter_simple.py` - EXR conversion
+- `abc_retime/` - Bundled ABC Retime plugin (by axisfx2)
 - `YS_Guardian_Documentation.md` - User documentation
 
 ## Development Rules
@@ -76,6 +77,7 @@ Additional features include Shot ID management, Render Preset selection, Artist 
 - **Plugin Icon**: Custom YS Guardian icon displays in Extensions menu
 - **Flexible Preset Names**: Accepts "pre_render", "pre-render", "Pre-Render" (case-insensitive)
 - **Camera Setups**: Three pre-configured camera rigs (Simple, Shakel, Path) - one-click merge into scene
+- **ABC Retime Integration**: Bundled plugin with one-click tag application for alembic retiming
 
 ### What Doesn't Work ❌
 - **Forcing Redshift Snapshot Directory**: Can't override Redshift's save location at runtime
@@ -139,6 +141,16 @@ The plugin should do what it can do well, and clearly communicate its limitation
 - Plugin Info dialog includes step-by-step Redshift setup
 - README updated with clear configuration requirements
 
+### ABC Retime Integration
+- **Bundled Plugin**: abc_retime by axisfx2 included in installation
+- **One-Click Application**: Button in Quick Actions applies tag to selected objects
+- **Plugin ID**: 1058910 (Alembic Retime tag)
+- **Supported Objects**: Alembic Object, Alembic Tag, Point Cache, Mograph Cache, X-Particles Cache
+- **Manual Access**: Right-click Tags → Extensions → Alembic Retime
+- **Features**: Percentage-based retiming, frame number control, timeline manager support
+- **Installation**: Automatically installed to Cinema 4D plugins folder
+- **Error Handling**: Clear messages for missing plugin, existing tags, or invalid objects
+
 ## Installation Batch File Maintenance ⚠️
 
 ### ALWAYS Update the Installation Batch
@@ -193,7 +205,7 @@ The plugin should do what it can do well, and clearly communicate its limitation
 │ Quick Actions                        │
 │ [Hierarchy→Layers (2x)] [Solo (2x)] │
 │ [Search 3D Model]  [Ask ChatGPT]    │
-│ [Vibrate Null] [Cam Rig] [Drop] [?] │
+│ [Vibrate Null] [Drop] [ABC Retime]  │
 │ [Cam: Simple] [Cam: Shakel] [Path]  │
 ├─────────────────────────────────────┤
 │ Stills Management                    │
