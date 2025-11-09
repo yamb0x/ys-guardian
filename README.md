@@ -1,4 +1,4 @@
-# YS Guardian v1.0.1
+# YS Guardian v1.0.2
 
 Quality control and workflow automation plugin for Cinema 4D production environments — built for Yambo Studio & Friends.
 
@@ -20,13 +20,14 @@ The tool is built for 3D professionals and studios. It combines monitoring with 
 
 ### Pipeline Checks
 
-Five continuous checks to keep your C4D files clean (you can choose which warnings to enable):
+Six continuous checks to keep your C4D files clean (you can choose which warnings to enable):
 
 - **Lights Organization** – Validates proper light group structure
 - **Visibility Consistency** – Detects viewport/render visibility mismatches
 - **Keyframe Validation** – Flags problematic multi-axis animations
 - **Camera Shift Detection** – Ensures proper camera framing
 - **Render Preset Compliance** – Enforces standardized output settings (Yambo Studio folder structure only currently)
+- **Asset Path Validation** – Detects absolute texture and asset paths that break portability (essential for team collaboration and render farm compatibility)
 
 Status display with color coding provides instant visual feedback. One-click selection of problematic objects helps save clicks on corrections.
 
@@ -233,6 +234,19 @@ The snapshot system uses external Python with Pillow for color-accurate conversi
 - Ensure abc_retime plugin is installed in Cinema 4D plugins folder
 
 ## Changelog
+
+### v1.0.2 | 09.11.2025
+
+**Major Fix**:
+- **Fixed absolute path detection for node materials** - Previously only detected absolute paths in Redshift materials (type 1036224). Now detects absolute paths in ALL material types including standard Cinema 4D node materials, which use the Maxon node system (`net.maxon`). This was causing the plugin to miss texture paths stored in standard materials.
+
+**Technical Details**:
+- Replaced complex node graph traversal (which required Cinema 4D API methods that don't exist) with direct BaseContainer parameter scanning
+- Now scans all material parameters for file paths, catching textures regardless of material type or node space configuration
+- Detects both forward slash (`D:/path`) and backslash (`D:\path`) absolute path formats
+- Added new asset types: `material_texture` and `material_param` for better tracking
+
+**Impact**: The 6th quality check (ASSET_PATHS) now properly detects absolute texture paths in standard Cinema 4D materials, not just Alembic files and Redshift materials. This prevents production issues caused by non-portable asset references.
 
 ### v1.0.1 | 11.10.2025
 

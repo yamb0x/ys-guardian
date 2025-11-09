@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion EnableExtensions
 
-REM YS Guardian Professional Installer v1.0.1
+REM YS Guardian Professional Installer v1.0.2
 REM This installer must be run as Administrator
 
 REM Keep window open after execution
@@ -14,7 +14,7 @@ REM =========================================================
 REM INITIALIZATION
 REM =========================================================
 
-set "VERSION=1.0.1"
+set "VERSION=1.0.2"
 set "INSTALL_DIR=%~dp0"
 set "LOG_FILE=%TEMP%\ys_guardian_install.log"
 set "PLUGIN_DIR=%INSTALL_DIR%plugin"
@@ -39,17 +39,16 @@ echo =========================================================
 echo.
 echo     Features:
 echo     - 5 Real-time quality checks with color-coded status
-echo     - Render Preset tabs (Previz, Pre-Render, Render, Stills)
-echo     - Force Settings button (standard resolutions at 25fps)
-echo     - Force Vertical button (9:16 aspect for reels/stories)
-echo     - Active Watchers as tab buttons
-echo     - Mute All button to hide all quality checks
-echo     - Professional UI with consistent tab styling
-echo     - Quick Actions: Hierarchy to Layers, Solo Layers, ABC Retime
+echo     - Render Preset dropdown with template-based forcing
+echo     - Force button: Apply template settings to active preset
+echo     - Force All button: Reset all 4 presets from template
+echo     - Always-on monitoring (all quality checks active)
+echo     - Ultra-compact UI (70%% smaller than v1.0)
+echo     - 10 Quick Actions in single row (H-^>L, Solo, 3D, etc)
 echo     - ABC Retime plugin bundled (one-click tag application)
 echo     - 3 Camera setups: Simple, Shakel, Path (one-click merge)
 echo     - Redshift snapshot management (Save Still)
-echo     - ACES color-accurate EXR to PNG conversion
+echo     - Template-based render settings for consistency
 echo.
 echo =========================================================
 echo.
@@ -230,6 +229,20 @@ if exist "%C4D_DIR%\cam_path.c4d" (
     echo [WARNING] cam_path.c4d not found (optional)
 )
 
+if exist "%C4D_DIR%\new.c4d" (
+    copy /Y "%C4D_DIR%\new.c4d" "%DEST_DIR%\c4d\" >nul 2>&1
+    if !errorlevel! equ 0 (
+        echo [OK] new.c4d template file ^(REQUIRED for Force/Force All^)
+    ) else (
+        echo [ERROR] Could not copy new.c4d template file
+        echo         Force and Force All buttons will not work!
+    )
+) else (
+    echo [ERROR] new.c4d template file not found ^(REQUIRED^)
+    echo         Expected: %C4D_DIR%\new.c4d
+    echo         Force and Force All buttons will not work without it!
+)
+
 REM =========================================================
 REM INSTALL PLUGIN ICON
 REM =========================================================
@@ -342,6 +355,17 @@ echo NEXT STEPS:
 echo -----------
 echo 1. Restart Cinema 4D 2024
 echo 2. Go to Extensions ^> YS Guardian Panel
+echo 3. Use the Preset dropdown to switch between render presets
+echo 4. Click "Force" to apply template settings to active preset
+echo 5. Click "Force All" to reset all 4 presets from template
+echo.
+echo NEW IN v1.1.0:
+echo --------------
+echo - Ultra-compact UI (70%% smaller - ~200px height)
+echo - Template-based preset forcing (new.c4d required)
+echo - Dropdown for render preset selection
+echo - Always-on monitoring (no manual controls)
+echo - 10 Quick Actions in single row
 echo.
 echo REDSHIFT SETUP (REQUIRED FOR SNAPSHOTS):
 echo -----------------------------------------

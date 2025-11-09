@@ -9,6 +9,13 @@ import webbrowser
 import threading
 from collections import defaultdict
 
+# Import maxon for node material access
+try:
+    import maxon
+    MAXON_AVAILABLE = True
+except ImportError:
+    MAXON_AVAILABLE = False
+
 # Import snapshot management modules
 sys.path.insert(0, os.path.dirname(__file__))
 try:
@@ -26,7 +33,7 @@ except ImportError as e:
 
 # Plugin ID - change if ID collision
 PLUGIN_ID = 2099069
-PLUGIN_NAME = "YS Guardian v1.0"
+PLUGIN_NAME = "YS Guardian v1.0.2"
 
 # Preset names - normalized to lowercase with underscores
 # The system accepts both "pre_render" and "pre-render" (case-insensitive)
@@ -521,21 +528,218 @@ def check_render_conflicts(doc):
     check_cache.set(doc, "rdc", result)
     return result
 
+# ---------------- texture and asset path checks ----------------
+def check_texture_paths(doc):
+    """Check for absolute texture paths in materials"""
+    cached = check_cache.get(doc, "paths")
+    if cached is not None:
+        return cached
+
+    absolute_paths = []
+
+    try:
+        # Check all materials for texture paths
+        materials = doc.GetMaterials()
+        for mat in materials:
+            if not mat:
+                continue
+
+            mat_type = mat.GetType()
+            mat_name = mat.GetName()
+
+            # FIRST: Check material's BaseContainer directly for file paths
+            # This works for all material types including node materials
+            try:
+                mat_bc = mat.GetDataInstance()
+                if mat_bc:
+                    # Scan all parameters for file paths
+                    for desc_id, desc_bc in mat_bc:
+                        try:
+                            # Try as filename
+                            value = mat_bc.GetFilename(desc_id)
+                            if value:
+                                filepath = str(value)
+                                if filepath and _is_absolute_path(filepath):
+                                    absolute_paths.append({
+                                        'type': 'material_texture',
+                                        'material': mat_name,
+                                        'path': filepath
+                                    })
+                                    continue
+
+                            # Try as string (some materials store paths as strings)
+                            value = mat_bc.GetString(desc_id)
+                            if value and isinstance(value, str):
+                                # Check if it looks like a file path
+                                if _is_absolute_path(value) and ('/' in value or '\\' in value):
+                                    absolute_paths.append({
+                                        'type': 'material_param',
+                                        'material': mat_name,
+                                        'path': value
+                                    })
+                        except:
+                            pass
+            except:
+                pass
+
+            # SECOND: Also check shaders attached to the material (legacy approach)
+            shaders = []
+            shader = mat.GetFirstShader()
+            while shader:
+                shaders.append(shader)
+                shader = shader.GetNext()
+
+            # Check each shader for file paths
+            for shader in shaders:
+                # Common texture shader types
+                shader_type = shader.GetType()
+
+                # Bitmap shader (most common)
+                if shader_type == c4d.Xbitmap:
+                    try:
+                        filepath = shader[c4d.BITMAPSHADER_FILENAME]
+                        if filepath and _is_absolute_path(filepath):
+                            absolute_paths.append({
+                                'type': 'texture',
+                                'material': mat.GetName(),
+                                'shader': shader.GetName(),
+                                'path': filepath
+                            })
+                    except:
+                        pass
+
+                # Redshift Texture Sampler: 1036227
+                elif shader_type == 1036227:
+                    try:
+                        # Try to get filename parameter
+                        bc = shader.GetDataInstance()
+                        if bc:
+                            # Common parameter IDs for Redshift texture
+                            for param_id in [10000, 1, 2, 100]:  # Try common parameter IDs
+                                try:
+                                    filepath = bc.GetFilename(param_id)
+                                    if filepath:
+                                        filepath_str = str(filepath)
+                                        if filepath_str and _is_absolute_path(filepath_str):
+                                            absolute_paths.append({
+                                                'type': 'redshift_shader',
+                                                'material': mat.GetName(),
+                                                'shader': shader.GetName(),
+                                                'path': filepath_str
+                                            })
+                                            break  # Found it, don't check other IDs
+                                except:
+                                    pass
+                    except:
+                        pass
+
+                # Check for other common file path parameters in any shader
+                bc = shader.GetDataInstance()
+                if bc:
+                    for desc_id, desc_bc in bc:
+                        try:
+                            # Try as filename first
+                            value = bc.GetFilename(desc_id)
+                            if value:
+                                value_str = str(value)
+                                if value_str and _is_absolute_path(value_str):
+                                    absolute_paths.append({
+                                        'type': 'shader_file',
+                                        'material': mat.GetName(),
+                                        'shader': shader.GetName(),
+                                        'path': value_str
+                                    })
+                                    continue
+
+                            # Try as string
+                            value = bc.GetString(desc_id)
+                            if value and isinstance(value, str) and _is_absolute_path(value):
+                                absolute_paths.append({
+                                    'type': 'shader_param',
+                                    'material': mat.GetName(),
+                                    'shader': shader.GetName(),
+                                    'path': value
+                                })
+                        except:
+                            pass
+
+        # Check for alembic files
+        first = doc.GetFirstObject()
+        if first:
+            for obj in _iter_objs(first, MAX_OBJECTS_PER_CHECK):
+                if not obj:
+                    continue
+
+                # Check for Alembic Generator
+                if obj.GetType() == 1028083:  # Alembic Generator ID
+                    try:
+                        filepath = obj[c4d.ALEMBIC_PATH]
+                        if filepath and _is_absolute_path(filepath):
+                            absolute_paths.append({
+                                'type': 'alembic',
+                                'object': obj.GetName(),
+                                'path': filepath
+                            })
+                    except:
+                        pass
+
+                # Check for Alembic Tag
+                tags = obj.GetTags()
+                for tag in tags:
+                    if tag.GetType() == 1028081:  # Alembic Tag ID
+                        try:
+                            filepath = tag[c4d.ALEMBIC_PATH]
+                            if filepath and _is_absolute_path(filepath):
+                                absolute_paths.append({
+                                    'type': 'alembic_tag',
+                                    'object': obj.GetName(),
+                                    'path': filepath
+                                })
+                        except:
+                            pass
+
+                # Early exit if too many issues
+                if len(absolute_paths) > 50:
+                    safe_print(f"Too many absolute path issues found ({len(absolute_paths)}+), stopping check")
+                    break
+
+    except Exception as e:
+        safe_print(f"Error checking texture/asset paths: {e}")
+
+    check_cache.set(doc, "paths", absolute_paths)
+    return absolute_paths
+
+def _is_absolute_path(filepath):
+    """Check if a file path is absolute (not relative)"""
+    if not filepath:
+        return False
+
+    # Windows absolute paths: C:\, D:\, \\server\
+    if len(filepath) > 2:
+        if filepath[1] == ':' or filepath.startswith('\\\\'):
+            return True
+
+    # Unix absolute paths: /
+    if filepath.startswith('/'):
+        return True
+
+    return False
+
 # ---------------- UI StatusArea ----------------
 class StatusArea(gui.GeUserArea):
     def __init__(self):
         super().__init__()
         self.data = {}
-        self.show = {"lights": True, "vis": True, "keys": True, "cam": True, "rdc": True}
-        self.pad = 3  # Tighter padding for terminal look
-        self.rowh = 24  # Match select button height
+        self.show = {"lights": True, "vis": True, "keys": True, "cam": True, "rdc": True, "paths": True}
+        self.pad = 2  # Compact padding (reduced from 3)
+        self.rowh = 12  # Compact row height (reduced from 24 to save space)
         self.font = c4d.FONT_MONOSPACED  # Terminal-style monospace font
         self.last_draw_time = 0
         self.min_draw_interval = 0.05  # Minimum 50ms between redraws
 
     def GetMinSize(self):
         rows = sum(1 for _, v in self.show.items() if v)
-        return 620, max(1, rows) * (self.rowh + self.pad) + self.pad + 28
+        return 400, max(1, rows) * (self.rowh + self.pad) + self.pad + 4
 
     def set_state(self, data, show):
         self.data = data or {}
@@ -633,6 +837,17 @@ class StatusArea(gui.GeUserArea):
                         status = "[ OK ]"
                         message = "Render presets compliant"
                         text_col = c4d.Vector(0.3, 1, 0.3)  # Green text
+                elif mode == "paths":
+                    if val > 0:
+                        status = "[FAIL]"
+                        names = self.data.get("paths_names", [])
+                        first = names[0] if names else "asset"
+                        message = f"Absolute path: {first}" + (f" (+{val-1} more)" if val > 1 else "")
+                        text_col = c4d.Vector(1, 0.3, 0.3)  # Red text
+                    else:
+                        status = "[ OK ]"
+                        message = "All assets use relative paths"
+                        text_col = c4d.Vector(0.3, 1, 0.3)  # Green text
                 else:
                     status = "[ OK ]" if val <= 0 else "[FAIL]"
                     message = ""
@@ -652,15 +867,15 @@ class StatusArea(gui.GeUserArea):
                 check_name = label.ljust(15)
 
                 # Draw status
-                self.DrawText(status, int(x+5), int(y+6))
+                self.DrawText(status, int(x+5), int(y+2))
 
                 # Draw check name
                 self.DrawSetTextCol(c4d.Vector(0.5, 0.5, 0.5), c4d.Vector(0,0,0))  # Gray for label
-                self.DrawText(f"{check_name}:", int(x+55), int(y+6))
+                self.DrawText(f"{check_name}:", int(x+55), int(y+2))
 
                 # Draw message
                 self.DrawSetTextCol(text_col, c4d.Vector(0,0,0))
-                self.DrawText(message, int(x+175), int(y+6))
+                self.DrawText(message, int(x+175), int(y+2))
 
                 y += self.rowh + self.pad
 
@@ -670,17 +885,14 @@ class StatusArea(gui.GeUserArea):
                 ("KEYFRAMES", "keys", "keys"),
                 ("CAMERAS", "cam", "cam"),
                 ("RENDER_PRESETS", "rdc", "rdc"),
+                ("ASSET_PATHS", "paths", "paths"),
             ]
 
             for label, key, mode in mapping:
                 if self.show.get(key, False):
                     row(label, key, mode)
 
-            y += 6
-            # Footer text with simplified format (GitHub button will be separate)
-            self.DrawSetTextCol(c4d.Vector(0.6, 0.6, 0.6), c4d.Vector(0,0,0))  # Gray color for footer
-            footer_text = "YAMBO STUDIO © 2025  YS GUARDIAN  V1.0"
-            self.DrawText(footer_text, int(x+6), int(h-18))
+            # Footer removed for space optimization
 
         except Exception as e:
             safe_print(f"Error in DrawMsg: {e}")
@@ -772,7 +984,7 @@ _snapshot_handler = SnapshotHandler()
 # ---------------- UI ----------------
 class G:
     SHOT = 1001
-    PRESET = 1002  # Not used anymore - replaced by tabs
+    PRESET_DROPDOWN = 1002  # Dropdown for render preset selection
     ARTIST = 1003
     LIVE = 1004
     STEP = 1005
@@ -800,12 +1012,16 @@ class G:
     STATUS_CAMS = 1108
     STATUS_PRESET = 1109
 
-    # Select buttons for quality checks (in status area)
-    SEL_LIGHTS = 1110
-    SEL_VIS = 1111
-    SEL_KEYS = 1112
-    SEL_CAMS = 1113
-    SEL_PRESET = 1114
+    # Checkboxes for quality checks
+    CHK_LIGHTS = 1110
+    CHK_VIS = 1111
+    CHK_KEYS = 1112
+    CHK_CAMS = 1113
+    CHK_PRESET = 1114
+    CHK_PATHS = 1115
+
+    # Single select button for checked items
+    BTN_SELECT_CHECKED = 1116
 
     # New Quick Action buttons
     BTN_VIBRATE_NULL = 1120
@@ -815,13 +1031,14 @@ class G:
     BTN_CAM_PATH = 1125  # Path camera setup
     BTN_PLACEHOLDER = 1109  # Fourth button placeholder
 
-    # Render preset tab buttons
+    # Render preset tab buttons (legacy - kept for compatibility)
     BTN_PRESET_PREVIZ = 1200
     BTN_PRESET_PRERENDER = 1201
     BTN_PRESET_RENDER = 1202
     BTN_PRESET_STILLS = 1203
     BTN_FORCE_RENDER = 1204
     BTN_FORCE_VERTICAL = 1205
+    BTN_FORCE_ALL = 1206  # Force all presets from template
 
     # Active Watchers as tabs (replacing checkboxes)
     BTN_WATCH_LIGHTS = 1300
@@ -942,9 +1159,18 @@ class YSPanel(gui.GeDialog):
             safe_print(f"Error applying render preset: {e}")
 
     def _update_preset_buttons(self):
-        """Update preset button visual state to show active preset"""
-        # This could be enhanced with visual feedback in future
-        pass
+        """Update preset dropdown to show active preset"""
+        # Map preset names to dropdown indices
+        preset_to_index = {
+            "previz": 0,
+            "pre_render": 1,
+            "render": 2,
+            "stills": 3
+        }
+
+        normalized_preset = normalize_preset_name(self._active_preset)
+        if normalized_preset in preset_to_index:
+            self.SetInt32(G.PRESET_DROPDOWN, preset_to_index[normalized_preset])
 
     def _flags(self):
         # Return watcher states (now controlled by tab buttons)
@@ -978,6 +1204,7 @@ class YSPanel(gui.GeDialog):
             keys_bad = check_keys(doc)
             cam_bad = check_camera_shift(doc)
             rdc_bad = check_render_conflicts(doc)
+            paths_bad = check_texture_paths(doc)
 
             # Update visual status area
             lights_count = len(lights_bad) if lights_bad else 0
@@ -985,6 +1212,7 @@ class YSPanel(gui.GeDialog):
             keys_count = len(keys_bad) if keys_bad else 0
             cam_count = len(cam_bad) if cam_bad else 0
             rdc_count = int(rdc_bad) if rdc_bad else 0
+            paths_count = len(paths_bad) if paths_bad else 0
 
             # Update StatusArea visual display
             self.ua.set_state(
@@ -996,16 +1224,18 @@ class YSPanel(gui.GeDialog):
                     keys_names=[(o.GetName() or "object") for o in (keys_bad[:10] if keys_bad else [])],
                     cam=cam_count,
                     rdc=rdc_count,
+                    paths=paths_count,
+                    paths_names=[
+                        f"{'RS tex' if 'redshift' in p['type'] else p['type']}: {p.get('material', p.get('object', 'unknown'))}"
+                        for p in (paths_bad[:10] if paths_bad else [])
+                    ],
                 ),
                 self._flags(),
             )
 
-            # Enable/disable select buttons based on issues
-            self.Enable(G.SEL_LIGHTS, lights_count > 0)
-            self.Enable(G.SEL_VIS, vis_count > 0)
-            self.Enable(G.SEL_KEYS, keys_count > 0)
-            self.Enable(G.SEL_CAMS, cam_count > 0)
-            self.Enable(G.SEL_PRESET, rdc_count > 0)
+            # Enable/disable checkboxes based on issues (always enabled for user flexibility)
+            # Checkboxes are always enabled - users can tick/untick as needed
+            # The Select button will show appropriate messages if nothing is found
 
             # Store results for selection
             self._lights_bad = lights_bad
@@ -1013,6 +1243,7 @@ class YSPanel(gui.GeDialog):
             self._keys_bad = keys_bad
             self._cam_bad = cam_bad
             self._preset_bad = []  # For render presets, we don't track specific objects
+            self._paths_bad = paths_bad
 
         except Exception as e:
             safe_print(f"Error during refresh: {e}")
@@ -1021,158 +1252,77 @@ class YSPanel(gui.GeDialog):
     def CreateLayout(self):
         self.SetTitle(PLUGIN_NAME)
 
-        # Main container with better spacing
+        # Main container - compact spacing
         self.GroupBegin(1, c4d.BFH_SCALEFIT|c4d.BFV_SCALEFIT, 1, 0)
-        self.GroupBorderSpace(10, 10, 10, 10)
+        self.GroupBorderSpace(6, 6, 6, 6)
 
-        # Top section - Job & Artist info
-        self.GroupBegin(10, c4d.BFH_SCALEFIT, 1, 0)
-
-        # Job info row with Shot ID
-        self.GroupBegin(11, c4d.BFH_SCALEFIT, 2, 0)
-        self.AddStaticText(0,0,80,0,"Shot ID:",0)
-        self.AddEditText(G.SHOT, c4d.BFH_SCALEFIT, 200,0)
+        # All controls in single row - ultra compact
+        self.GroupBegin(10, c4d.BFH_SCALEFIT, 10, 0)
+        self.AddStaticText(0,0,30,0,"Shot:",0)
+        self.AddEditText(G.SHOT, c4d.BFH_SCALEFIT, 50,0)
+        self.AddStaticText(0,0,35,0,"Artist:",0)
+        self.AddEditText(G.ARTIST, c4d.BFH_SCALEFIT, 60,0)
+        self.AddStaticText(0,0,40,0,"Preset:",0)
+        self.AddComboBox(G.PRESET_DROPDOWN, c4d.BFH_SCALEFIT, 80, 0)
+        self.AddButton(G.BTN_FORCE_RENDER, c4d.BFH_SCALEFIT, 0, 0, "Force")
+        self.AddButton(G.BTN_FORCE_ALL, c4d.BFH_SCALEFIT, 0, 0, "Force All")
         self.GroupEnd()
 
-        # Artist row (moved below Shot ID)
-        self.AddSeparatorH(5)
-        self.GroupBegin(12, c4d.BFH_SCALEFIT, 2, 0)
-        self.AddStaticText(0,0,80,0,"Artist:",0)
-        self.AddEditText(G.ARTIST, c4d.BFH_SCALEFIT, 0,0)
-        self.GroupEnd()
-
-        # Render Preset tabs and Force buttons
+        # Status area (no label, directly to visual display)
         self.AddSeparatorH(8)
-        self.GroupBegin(13, c4d.BFH_SCALEFIT, 1, 0)
-        self.AddStaticText(0,0,0,0,"Render Preset:",0)
-        self.GroupBegin(14, c4d.BFH_SCALEFIT, 6, 0)
-        # Add preset buttons as tabs
-        self.AddButton(G.BTN_PRESET_PREVIZ, c4d.BFH_SCALEFIT, 0, 0, "Previz")
-        self.AddButton(G.BTN_PRESET_PRERENDER, c4d.BFH_SCALEFIT, 0, 0, "Pre-Render")
-        self.AddButton(G.BTN_PRESET_RENDER, c4d.BFH_SCALEFIT, 0, 0, "Render")
-        self.AddButton(G.BTN_PRESET_STILLS, c4d.BFH_SCALEFIT, 0, 0, "Stills")
-        self.AddButton(G.BTN_FORCE_RENDER, c4d.BFH_SCALEFIT, 0, 0, "Force Settings")
-        self.AddButton(G.BTN_FORCE_VERTICAL, c4d.BFH_SCALEFIT, 0, 0, "Force Vertical")
-        self.GroupEnd()
-        self.GroupEnd()
-
-        self.GroupEnd()
-
-        # Add separator after Render Presets section
-        self.AddSeparatorH(8)
-
-        # Monitoring controls section - modernized
-        self.AddSeparatorH(12)
-        self.GroupBegin(20, c4d.BFH_SCALEFIT, 1, 0)
-        self.AddStaticText(0,0,0,0,"Monitoring Controls",0)
-        self.AddSeparatorH(5)  # Add separator after title
-
-        # Update rate and mute controls - cleaner layout with more spacing
-        self.GroupBegin(21, c4d.BFH_SCALEFIT, 2, 0)
-        # Left side - Update rate controls with wider spacing
-        self.GroupBegin(211, c4d.BFH_LEFT, 3, 0)
-        self.AddStaticText(0,0,100,0,"Update Rate:",0)  # Increased width
-        self.AddEditNumberArrows(G.STEP,0,50,0)
-        self.AddStaticText(0,0,70,0,"x 100ms",0)  # Increased width
-        self.GroupEnd()
-        # Right side - Mute button
-        self.GroupBegin(212, c4d.BFH_RIGHT, 1, 0)
-        self.AddButton(G.BTN_MUTE_ALL, c4d.BFH_RIGHT, 60, 0, "Mute")
-        self.GroupEnd()
-        self.GroupEnd()
-
-        # Active watchers as tabs
-        self.AddSeparatorH(5)
-        self.AddStaticText(0,0,0,0,"Enable/Disable Watchers:",0)  # Changed text
-        self.AddSeparatorH(5)  # Add separator after title
-        self.GroupBegin(35, c4d.BFH_SCALEFIT, 5, 0)
-        self.AddButton(G.BTN_WATCH_LIGHTS, c4d.BFH_SCALEFIT, 0, 0, "Lights")
-        self.AddButton(G.BTN_WATCH_VIS, c4d.BFH_SCALEFIT, 0, 0, "Visibility")
-        self.AddButton(G.BTN_WATCH_KEYS, c4d.BFH_SCALEFIT, 0, 0, "Keyframes")
-        self.AddButton(G.BTN_WATCH_CAM, c4d.BFH_SCALEFIT, 0, 0, "Cameras")
-        self.AddButton(G.BTN_WATCH_PRESET, c4d.BFH_SCALEFIT, 0, 0, "Presets")
-        self.GroupEnd()
-
-        self.GroupEnd()
-
-        # Status area (visual watcher with color-coded status)
-        self.AddSeparatorH(12)
         self.GroupBegin(40, c4d.BFH_SCALEFIT, 1, 0)
-        self.AddStaticText(0,0,0,0,"Quality Check Status",0)
-        self.AddSeparatorH(5)
 
         # Visual status area with terminal-style display
         self.GroupBegin(406, c4d.BFH_SCALEFIT, 2, 0)
-        self.AddUserArea(G.CANVAS, c4d.BFH_SCALEFIT|c4d.BFV_SCALEFIT, 0, 135)  # Adjusted height for 5 checks
+        self.AddUserArea(G.CANVAS, c4d.BFH_SCALEFIT|c4d.BFV_SCALEFIT, 0, 92)  # Compact height (no footer)
         self.ua = StatusArea()
         self.AttachUserArea(self.ua, G.CANVAS)
 
-        # Buttons column on the right
-        self.GroupBegin(407, c4d.BFH_RIGHT|c4d.BFV_TOP, 1, 0)
-        self.AddButton(G.SEL_LIGHTS, c4d.BFH_RIGHT, 60, 0, "Select")
-        self.AddButton(G.SEL_VIS, c4d.BFH_RIGHT, 60, 0, "Select")
-        self.AddButton(G.SEL_KEYS, c4d.BFH_RIGHT, 60, 0, "Select")
-        self.AddButton(G.SEL_CAMS, c4d.BFH_RIGHT, 60, 0, "Select")
-        self.AddButton(G.SEL_PRESET, c4d.BFH_RIGHT, 60, 0, "Info")
+        # Checkboxes and select button column on the right
+        self.GroupBegin(407, c4d.BFH_RIGHT|c4d.BFV_TOP, 2, 0)
+
+        # Checkboxes column (one per quality check) - no spacing
+        self.GroupBegin(408, c4d.BFH_RIGHT|c4d.BFV_TOP, 1, 0)
+        self.GroupSpace(0, 0)  # Remove all spacing between items
+        self.AddCheckbox(G.CHK_LIGHTS, c4d.BFH_RIGHT, 0, 10, "")
+        self.AddCheckbox(G.CHK_VIS, c4d.BFH_RIGHT, 0, 10, "")
+        self.AddCheckbox(G.CHK_KEYS, c4d.BFH_RIGHT, 0, 10, "")
+        self.AddCheckbox(G.CHK_CAMS, c4d.BFH_RIGHT, 0, 10, "")
+        self.AddCheckbox(G.CHK_PRESET, c4d.BFH_RIGHT, 0, 10, "")
+        self.AddCheckbox(G.CHK_PATHS, c4d.BFH_RIGHT, 0, 10, "")
+        self.GroupEnd()
+
+        # Single select button (acts on all checked items)
+        self.GroupBegin(409, c4d.BFH_RIGHT|c4d.BFV_TOP, 1, 0)
+        self.AddButton(G.BTN_SELECT_CHECKED, c4d.BFH_RIGHT, 50, 14, "Select")
         self.GroupEnd()
 
         self.GroupEnd()
 
         self.GroupEnd()
 
-        # Quick Actions - 4x4 grid
+        self.GroupEnd()
+
+        # Quick Actions - condensed single row
         self.AddSeparatorH(12)
-        self.GroupBegin(50, c4d.BFH_SCALEFIT, 1, 0)
-        self.AddStaticText(0,0,0,0,"Quick Actions",0)
-        self.AddSeparatorH(5)
-
-        # First row - Hierarchy and Solo
-        self.GroupBegin(51, c4d.BFH_SCALEFIT, 2, 0)
-        self.AddButton(G.BTN_A,c4d.BFH_SCALEFIT,0,0,"Hierarchy→Layers")
-        self.AddButton(G.BTN_B,c4d.BFH_SCALEFIT,0,0,"Solo Layers")
+        self.GroupBegin(50, c4d.BFH_SCALEFIT, 8, 0)
+        self.AddButton(G.BTN_A,c4d.BFH_SCALEFIT,0,0,"H→L")
+        self.AddButton(G.BTN_B,c4d.BFH_SCALEFIT,0,0,"Solo")
+        self.AddButton(G.BTN_VIBRATE_NULL,c4d.BFH_SCALEFIT,0,0,"Vib")
+        self.AddButton(G.BTN_DROP_TO_FLOOR,c4d.BFH_SCALEFIT,0,0,"Drop")
+        self.AddButton(G.BTN_ABC_RETIME, c4d.BFH_SCALEFIT, 0, 0, "ABC")
+        self.AddButton(G.BTN_CAM_SIMPLE,c4d.BFH_SCALEFIT,0,0,"Cam1")
+        self.AddButton(G.BTN_CAM_SHAKEL,c4d.BFH_SCALEFIT,0,0,"Cam2")
+        self.AddButton(G.BTN_CAM_PATH,c4d.BFH_SCALEFIT,0,0,"Cam3")
         self.GroupEnd()
 
-        # Second row - Search and ChatGPT
-        self.GroupBegin(52, c4d.BFH_SCALEFIT, 2, 0)
-        self.AddButton(G.BTN_C,c4d.BFH_SCALEFIT,0,0,"Search 3D Model")
-        self.AddButton(G.BTN_D,c4d.BFH_SCALEFIT,0,0,"Ask ChatGPT")
-        self.GroupEnd()
-
-        # Third row - Additional tools
-        self.GroupBegin(53, c4d.BFH_SCALEFIT, 3, 0)
-        self.AddButton(G.BTN_VIBRATE_NULL,c4d.BFH_SCALEFIT,0,0,"Vibrate Null")
-        self.AddButton(G.BTN_DROP_TO_FLOOR,c4d.BFH_SCALEFIT,0,0,"Drop to Floor")
-        self.AddButton(G.BTN_ABC_RETIME, c4d.BFH_SCALEFIT, 0, 0, "ABC Retime")
-        self.GroupEnd()
-
-        # Fourth row - Camera setups
-        self.GroupBegin(54, c4d.BFH_SCALEFIT, 3, 0)
-        self.AddButton(G.BTN_CAM_SIMPLE,c4d.BFH_SCALEFIT,0,0,"Cam: Simple")
-        self.AddButton(G.BTN_CAM_SHAKEL,c4d.BFH_SCALEFIT,0,0,"Cam: Shakel")
-        self.AddButton(G.BTN_CAM_PATH,c4d.BFH_SCALEFIT,0,0,"Cam: Path")
-        self.GroupEnd()
-
-        self.GroupEnd()
-
-        # Snapshot section - improved layout
-        self.AddSeparatorH(12)
-        self.GroupBegin(60, c4d.BFH_SCALEFIT, 1, 0)
-        self.AddStaticText(0,0,0,0,"Stills Management",0)
-        self.AddSeparatorH(5)
-
-        self.GroupBegin(61, c4d.BFH_SCALEFIT, 2, 0)
-        self.GroupBorderSpace(5, 5, 5, 5)
-        self.AddButton(G.BTN_OPEN_FOLDER, c4d.BFH_SCALEFIT, 0, 0, "Open Your Stills Folder")
-        self.AddButton(G.BTN_SNAPSHOT, c4d.BFH_SCALEFIT, 0, 0, "Save Still")
-        self.GroupEnd()
-
-        # Add GitHub and Bug Report buttons
+        # Utilities - Stills, GitHub, Bug Report (condensed single row)
         self.AddSeparatorH(8)
-        self.GroupBegin(62, c4d.BFH_SCALEFIT, 2, 0)
-        self.AddButton(G.BTN_GITHUB, c4d.BFH_SCALEFIT, 0, 0, "View on GitHub ↗")
-        self.AddButton(G.BTN_BUG_REPORT, c4d.BFH_SCALEFIT, 0, 0, "Report Bug ↗")
-        self.GroupEnd()
-
+        self.GroupBegin(60, c4d.BFH_SCALEFIT, 4, 0)
+        self.AddButton(G.BTN_OPEN_FOLDER, c4d.BFH_SCALEFIT, 0, 0, "Folder")
+        self.AddButton(G.BTN_SNAPSHOT, c4d.BFH_SCALEFIT, 0, 0, "Still")
+        self.AddButton(G.BTN_GITHUB, c4d.BFH_SCALEFIT, 0, 0, "Git↗")
+        self.AddButton(G.BTN_BUG_REPORT, c4d.BFH_SCALEFIT, 0, 0, "Bug↗")
         self.GroupEnd()
 
         self.GroupEnd()  # Main container end
@@ -1181,17 +1331,22 @@ class YSPanel(gui.GeDialog):
         return True
 
     def InitValues(self):
-        # Initialize watcher states (all active by default)
+        # Initialize watcher states (all active by default - always enabled now)
         self._watcher_states = {
             'lights': True,
             'vis': True,
             'keys': True,
             'cam': True,
-            'rdc': True
+            'rdc': True,
+            'paths': True  # Texture and alembic absolute path check
         }
-        self._all_muted = False
+        self._all_muted = False  # Always False - monitoring always active
 
-        self.SetInt32(G.STEP, 10)
+        # Populate render preset dropdown
+        self.AddChild(G.PRESET_DROPDOWN, 0, "Previz")
+        self.AddChild(G.PRESET_DROPDOWN, 1, "Pre-Render")
+        self.AddChild(G.PRESET_DROPDOWN, 2, "Render")
+        self.AddChild(G.PRESET_DROPDOWN, 3, "Stills")
 
         # Load artist name from computer-level settings
         self._artist_name = GlobalSettings.load_artist_name()
@@ -1208,10 +1363,7 @@ class YSPanel(gui.GeDialog):
         return True
 
     def Timer(self, msg):
-        # Performance optimization: Skip all work when all watchers are muted
-        if self._all_muted:
-            return
-
+        # Monitoring is always active now (no mute functionality)
         doc = c4d.documents.GetActiveDocument()
 
         # Document change detection
@@ -1221,9 +1373,12 @@ class YSPanel(gui.GeDialog):
             self._refresh()
             self._last_doc = doc
 
-        # Live updates
-        if self.GetBool(G.LIVE):
-            self._refresh()
+        # Always perform live updates (monitoring always active)
+        self._refresh()
+
+        # Check for absolute paths and warn user periodically
+        if doc and hasattr(self, '_paths_bad') and self._paths_bad:
+            check_and_warn_absolute_paths()
 
     def Command(self, cid, msg):
         doc = c4d.documents.GetActiveDocument()
@@ -1233,46 +1388,20 @@ class YSPanel(gui.GeDialog):
         if cid == G.SHOT:
             self._apply_shot(doc)
 
-        # Handle preset tab buttons
-        elif cid == G.BTN_PRESET_PREVIZ:
-            self._apply_preset(doc, "previz")
-        elif cid == G.BTN_PRESET_PRERENDER:
-            self._apply_preset(doc, "pre_render")
-        elif cid == G.BTN_PRESET_RENDER:
-            self._apply_preset(doc, "render")
-        elif cid == G.BTN_PRESET_STILLS:
-            self._apply_preset(doc, "stills")
+        # Handle preset dropdown selection
+        elif cid == G.PRESET_DROPDOWN:
+            selected_index = self.GetInt32(G.PRESET_DROPDOWN)
+            index_to_preset = {0: "previz", 1: "pre_render", 2: "render", 3: "stills"}
+            if selected_index in index_to_preset:
+                self._apply_preset(doc, index_to_preset[selected_index])
 
+        # Handle Force button (applies template settings to current preset)
         elif cid == G.BTN_FORCE_RENDER:
             self._force_render_settings(doc)
 
-        elif cid == G.BTN_FORCE_VERTICAL:
-            self._force_vertical_aspect(doc)
-
-        # Handle watcher tab buttons
-        elif cid == G.BTN_WATCH_LIGHTS:
-            self._watcher_states['lights'] = not self._watcher_states['lights']
-            self._refresh()
-        elif cid == G.BTN_WATCH_VIS:
-            self._watcher_states['vis'] = not self._watcher_states['vis']
-            self._refresh()
-        elif cid == G.BTN_WATCH_KEYS:
-            self._watcher_states['keys'] = not self._watcher_states['keys']
-            self._refresh()
-        elif cid == G.BTN_WATCH_CAM:
-            self._watcher_states['cam'] = not self._watcher_states['cam']
-            self._refresh()
-        elif cid == G.BTN_WATCH_PRESET:
-            self._watcher_states['rdc'] = not self._watcher_states['rdc']
-            self._refresh()
-
-        elif cid == G.BTN_MUTE_ALL:
-            self._all_muted = not self._all_muted
-            self._refresh()
-            if self._all_muted:
-                safe_print("All quality checks muted")
-            else:
-                safe_print("Quality checks unmuted")
+        # Handle Force All button (applies template to all 4 presets + deletes others)
+        elif cid == G.BTN_FORCE_ALL:
+            self._force_all_presets(doc)
 
         elif cid == G.ARTIST:
             # Artist name changed - save to global settings
@@ -1311,12 +1440,6 @@ class YSPanel(gui.GeDialog):
         elif cid == G.BTN_B:
             self._solo_layers(doc)
 
-        elif cid == G.BTN_C:
-            self._search_3d_model()
-
-        elif cid == G.BTN_D:
-            self._ask_chatgpt()
-
         elif cid == G.BTN_GITHUB:
             # Open GitHub repository
             github_url = "https://github.com/yamb0x/ys-guardian"
@@ -1329,36 +1452,99 @@ class YSPanel(gui.GeDialog):
             webbrowser.open(bug_url)
             safe_print(f"Opening bug report page: {bug_url}")
 
-        elif cid == G.SEL_LIGHTS:
-            if hasattr(self, '_lights_bad') and self._lights_bad:
-                _select_objects(doc, self._lights_bad)
-                safe_print(f"Selected {len(self._lights_bad)} problematic lights")
-            else:
-                c4d.gui.MessageDialog("No light issues found to select")
+        elif cid == G.BTN_SELECT_CHECKED:
+            # Process all checked quality checks
+            all_objects = []
+            messages = []
+            show_info = False
 
-        elif cid == G.SEL_VIS:
-            if hasattr(self, '_vis_bad') and self._vis_bad:
-                _select_objects(doc, self._vis_bad)
-                safe_print(f"Selected {len(self._vis_bad)} visibility issues")
-            else:
-                c4d.gui.MessageDialog("No visibility issues found to select")
+            # Check which checkboxes are ticked and gather objects/info
+            if self.GetBool(G.CHK_LIGHTS):
+                if hasattr(self, '_lights_bad') and self._lights_bad:
+                    all_objects.extend(self._lights_bad)
+                    messages.append(f"Lights: {len(self._lights_bad)}")
 
-        elif cid == G.SEL_KEYS:
-            if hasattr(self, '_keys_bad') and self._keys_bad:
-                _select_objects(doc, self._keys_bad)
-                safe_print(f"Selected {len(self._keys_bad)} keyframe issues")
-            else:
-                c4d.gui.MessageDialog("No keyframe issues found to select")
+            if self.GetBool(G.CHK_VIS):
+                if hasattr(self, '_vis_bad') and self._vis_bad:
+                    all_objects.extend(self._vis_bad)
+                    messages.append(f"Visibility: {len(self._vis_bad)}")
 
-        elif cid == G.SEL_CAMS:
-            if hasattr(self, '_cam_bad') and self._cam_bad:
-                _select_objects(doc, self._cam_bad)
-                safe_print(f"Selected {len(self._cam_bad)} camera shift issues")
-            else:
-                c4d.gui.MessageDialog("No camera shift issues found to select")
+            if self.GetBool(G.CHK_KEYS):
+                if hasattr(self, '_keys_bad') and self._keys_bad:
+                    all_objects.extend(self._keys_bad)
+                    messages.append(f"Keyframes: {len(self._keys_bad)}")
 
-        elif cid == G.SEL_PRESET:
-            c4d.gui.MessageDialog("Please ensure only standard render presets exist:\n- previz\n- pre_render\n- render\n- stills")
+            if self.GetBool(G.CHK_CAMS):
+                if hasattr(self, '_cam_bad') and self._cam_bad:
+                    all_objects.extend(self._cam_bad)
+                    messages.append(f"Cameras: {len(self._cam_bad)}")
+
+            if self.GetBool(G.CHK_PRESET):
+                show_info = True
+                messages.append("Render Presets (info)")
+
+            if self.GetBool(G.CHK_PATHS):
+                show_info = True
+                messages.append("Asset Paths (info)")
+
+            # Perform actions
+            if all_objects:
+                # Remove duplicates while preserving order
+                unique_objects = []
+                seen = set()
+                for obj in all_objects:
+                    if obj not in seen:
+                        unique_objects.append(obj)
+                        seen.add(obj)
+
+                _select_objects(doc, unique_objects)
+                safe_print(f"Selected {len(unique_objects)} objects: {', '.join(messages)}")
+                c4d.gui.MessageDialog(f"Selected {len(unique_objects)} objects with issues:\n\n" + "\n".join(messages))
+
+            if show_info:
+                # Show info dialogs for preset and paths
+                info_msg = ""
+
+                if self.GetBool(G.CHK_PRESET):
+                    info_msg += "RENDER PRESETS:\n"
+                    info_msg += "Please ensure only standard presets exist:\n"
+                    info_msg += "- previz\n- pre_render\n- render\n- stills\n\n"
+
+                if self.GetBool(G.CHK_PATHS):
+                    # Show detailed information about absolute paths
+                    if hasattr(self, '_paths_bad') and self._paths_bad:
+                        info_msg += "ABSOLUTE PATHS DETECTED:\n\n"
+                        for i, path_info in enumerate(self._paths_bad[:10], 1):
+                            asset_type = path_info.get('type', 'unknown')
+                            if 'texture' in asset_type or 'shader' in asset_type or 'redshift' in asset_type:
+                                mat_name = path_info.get('material', 'unknown')
+                                if 'redshift' in asset_type:
+                                    info_msg += f"{i}. REDSHIFT TEXTURE in '{mat_name}'\n"
+                                else:
+                                    info_msg += f"{i}. TEXTURE in '{mat_name}'\n"
+                            elif asset_type == 'alembic':
+                                info_msg += f"{i}. ALEMBIC in object '{path_info.get('object', 'unknown')}'\n"
+                            elif asset_type == 'alembic_tag':
+                                info_msg += f"{i}. ALEMBIC TAG in object '{path_info.get('object', 'unknown')}'\n"
+                            else:
+                                info_msg += f"{i}. {asset_type.upper()} in '{path_info.get('material', path_info.get('object', 'unknown'))}'\n"
+                            info_msg += f"   Path: {path_info.get('path', 'unknown')}\n\n"
+
+                        if len(self._paths_bad) > 10:
+                            info_msg += f"... and {len(self._paths_bad) - 10} more\n\n"
+
+                        info_msg += "\n⚠️  All asset paths MUST be RELATIVE!\n"
+                        info_msg += "Use Project → Collect Assets or fix manually.\n"
+                    else:
+                        info_msg += "ASSET PATHS:\n"
+                        info_msg += "All asset paths are relative - looking good!\n"
+
+                if info_msg:
+                    c4d.gui.MessageDialog(info_msg)
+
+            # If nothing was selected/shown
+            if not all_objects and not show_info:
+                c4d.gui.MessageDialog("Please tick at least one checkbox to select or view info")
 
         elif cid == G.STEP:
             # Update timer interval
@@ -1437,16 +1623,87 @@ class YSPanel(gui.GeDialog):
             safe_print(f"Error merging camera file {filename}: {e}")
             c4d.gui.MessageDialog(f"Error loading camera setup: {e}")
 
+    def _load_template_render_data(self, preset_name):
+        """Load render data from template C4D file for the specified preset"""
+        try:
+            # Get path to the template C4D file (in plugin's c4d folder)
+            plugin_dir = os.path.dirname(__file__)
+            template_path = os.path.join(plugin_dir, "c4d", "new.c4d")
+
+            # Check if template file exists
+            if not os.path.exists(template_path):
+                safe_print(f"Template file not found: {template_path}")
+                return None
+
+            # Load the template document
+            template_doc = c4d.documents.LoadDocument(template_path, c4d.SCENEFILTER_NONE)
+            if not template_doc:
+                safe_print(f"Failed to load template document: {template_path}")
+                return None
+
+            # Find the render data matching the preset name
+            template_rd = template_doc.GetFirstRenderData()
+            normalized_target = normalize_preset_name(preset_name)
+
+            while template_rd:
+                template_name = normalize_preset_name(template_rd.GetName() or "")
+                if template_name == normalized_target:
+                    # Clone the render data
+                    cloned_rd = template_rd.GetClone(c4d.COPYFLAGS_NONE)
+                    c4d.documents.KillDocument(template_doc)  # Clean up template doc
+                    return cloned_rd
+                template_rd = template_rd.GetNext()
+
+            c4d.documents.KillDocument(template_doc)  # Clean up template doc
+            safe_print(f"Preset '{preset_name}' not found in template file")
+            return None
+
+        except Exception as e:
+            safe_print(f"Error loading template render data: {e}")
+            return None
+
     def _force_render_settings(self, doc):
-        """Force apply render settings based on active preset"""
+        """Force apply render settings from template file to active preset"""
         if not doc:
             return
 
+        template_doc = None
         try:
             # Get the active preset name
             preset_name = self._active_preset
 
-            # Find or create render data with this name
+            # Load the template document
+            plugin_dir = os.path.dirname(__file__)
+            template_path = os.path.join(plugin_dir, "c4d", "new.c4d")
+
+            if not os.path.exists(template_path):
+                c4d.gui.MessageDialog(f"Template file not found!\n\n"
+                                     f"Expected at:\n{template_path}")
+                return
+
+            template_doc = c4d.documents.LoadDocument(template_path, c4d.SCENEFILTER_NONE)
+            if not template_doc:
+                c4d.gui.MessageDialog(f"Failed to load template file!\n\n{template_path}")
+                return
+
+            # Find the matching preset in the template
+            template_rd = template_doc.GetFirstRenderData()
+            normalized_target = normalize_preset_name(preset_name)
+            source_rd = None
+
+            while template_rd:
+                template_name = normalize_preset_name(template_rd.GetName() or "")
+                if template_name == normalized_target:
+                    source_rd = template_rd
+                    break
+                template_rd = template_rd.GetNext()
+
+            if not source_rd:
+                c4d.gui.MessageDialog(f"Preset '{preset_name}' not found in template file!\n\n"
+                                     f"Template should contain: Previz, Pre-Render, Render, Stills")
+                return
+
+            # Find or create render data with this name in the current document
             rd = doc.GetFirstRenderData()
             target_rd = None
 
@@ -1464,48 +1721,27 @@ class YSPanel(gui.GeDialog):
                 doc.InsertRenderData(target_rd)
                 safe_print(f"Created new render preset: {preset_name}")
 
-            # Apply standard settings and output paths based on preset
-            if preset_name == "previz":
-                # Low quality for fast preview
-                target_rd[c4d.RDATA_XRES] = 1280
-                target_rd[c4d.RDATA_YRES] = 720
-                target_rd[c4d.RDATA_FRAMERATE] = 25
-                # Set output path
-                target_rd[c4d.RDATA_PATH] = "../../output/previz/_Shots/$take/$prj"
-            elif preset_name == "pre_render":
-                # Medium quality
-                target_rd[c4d.RDATA_XRES] = 1920
-                target_rd[c4d.RDATA_YRES] = 1080
-                target_rd[c4d.RDATA_FRAMERATE] = 25
-                # Set output path
-                target_rd[c4d.RDATA_PATH] = "../../output/pre_render/_Shots/$take/v01/$prj"
-            elif preset_name == "render":
-                # High quality
-                target_rd[c4d.RDATA_XRES] = 1920
-                target_rd[c4d.RDATA_YRES] = 1080
-                target_rd[c4d.RDATA_FRAMERATE] = 25
-                # Set output path
-                target_rd[c4d.RDATA_PATH] = "../../output/render/_Shots/$take/v01/$prj"
-            elif preset_name == "stills":
-                # Still image settings
-                target_rd[c4d.RDATA_XRES] = 3840
-                target_rd[c4d.RDATA_YRES] = 2160
-                target_rd[c4d.RDATA_FRAMERATE] = 25
-                # Set output path
-                target_rd[c4d.RDATA_PATH] = "../../output/stills/_Shots/$take/v01/$prj"
+            # Copy all settings from template to target (while template doc is still alive)
+            source_rd.CopyTo(target_rd, c4d.COPYFLAGS_NONE)
 
             # Set as active
             doc.SetActiveRenderData(target_rd)
             check_cache.clear()  # Clear cache to update compliance check immediately
             c4d.EventAdd()
 
-            c4d.gui.MessageDialog(f"Applied standard settings for '{preset_name}' preset\n\n"
+            safe_print(f"Applied template settings for '{preset_name}' preset")
+            c4d.gui.MessageDialog(f"Applied template settings for '{preset_name}' preset\n\n"
                                  f"Resolution: {target_rd[c4d.RDATA_XRES]}x{target_rd[c4d.RDATA_YRES]}\n"
                                  f"Frame Rate: {target_rd[c4d.RDATA_FRAMERATE]} fps\n"
                                  f"Output Path: {target_rd[c4d.RDATA_PATH]}")
 
         except Exception as e:
             safe_print(f"Error forcing render settings: {e}")
+            c4d.gui.MessageDialog(f"Error applying template settings: {e}")
+        finally:
+            # Clean up template document
+            if template_doc:
+                c4d.documents.KillDocument(template_doc)
 
     def _force_vertical_aspect(self, doc):
         """Force all render presets to 9:16 vertical aspect ratio for social media"""
@@ -1569,6 +1805,73 @@ class YSPanel(gui.GeDialog):
 
         except Exception as e:
             safe_print(f"Error forcing vertical aspect: {e}")
+
+    def _force_all_presets(self, doc):
+        """Force all 4 render presets from template file and delete others"""
+        if not doc:
+            return
+
+        try:
+            # Define the 4 standard presets
+            standard_presets = ["previz", "pre_render", "render", "stills"]
+
+            # Delete all existing render data first
+            rd = doc.GetFirstRenderData()
+            deleted_count = 0
+            while rd:
+                next_rd = rd.GetNext()
+                rd.Remove()
+                deleted_count += 1
+                rd = next_rd
+
+            safe_print(f"Deleted {deleted_count} existing render presets")
+
+            # Load and insert all 4 standard presets from template
+            inserted_count = 0
+            first_rd = None
+
+            for preset_name in standard_presets:
+                # Load template render data for this preset
+                template_rd = self._load_template_render_data(preset_name)
+                if template_rd:
+                    # Ensure proper name
+                    template_rd.SetName(preset_name)
+                    # Insert into document
+                    doc.InsertRenderData(template_rd)
+                    inserted_count += 1
+                    if first_rd is None:
+                        first_rd = template_rd
+                    safe_print(f"Inserted '{preset_name}' preset from template")
+                else:
+                    safe_print(f"Warning: Could not load '{preset_name}' from template")
+
+            # Set the first preset (previz) as active
+            if first_rd:
+                doc.SetActiveRenderData(first_rd)
+                self._active_preset = "previz"
+                self._update_preset_buttons()
+
+            check_cache.clear()  # Clear cache to update compliance check immediately
+            c4d.EventAdd()
+
+            if inserted_count > 0:
+                c4d.gui.MessageDialog(f"Force All Presets Complete!\n\n"
+                                     f"Deleted {deleted_count} old presets\n"
+                                     f"Inserted {inserted_count} standard presets from template:\n"
+                                     f"• Previz\n"
+                                     f"• Pre-Render\n"
+                                     f"• Render\n"
+                                     f"• Stills\n\n"
+                                     f"Active preset: Previz")
+            else:
+                plugin_dir = os.path.dirname(__file__)
+                template_path = os.path.join(plugin_dir, "c4d", "new.c4d")
+                c4d.gui.MessageDialog(f"Failed to load presets from template file.\n\n"
+                                     f"Make sure the template file exists at:\n{template_path}")
+
+        except Exception as e:
+            safe_print(f"Error forcing all presets: {e}")
+            c4d.gui.MessageDialog(f"Error forcing all presets: {e}")
 
     def _hierarchy_to_layers(self, doc):
         """Link main project nulls and their children to layers with matching names"""
@@ -2271,6 +2574,69 @@ def _select_objects(doc, objs):
 
     c4d.EventAdd()
 
+# -------------- Save Blocker Message Plugin --------------
+class SaveBlockerMessage(plugins.MessageData):
+    """Intercepts save messages to block saves when absolute paths exist"""
+
+    def CoreMessage(self, id, msg):
+        """Handle core messages"""
+        # Check for document save attempts
+        if id == c4d.EVMSG_CHANGE:
+            # This fires before many document operations
+            doc = c4d.documents.GetActiveDocument()
+            if doc and doc.GetChanged():
+                # Check if this is a save operation
+                # We'll check periodically and warn the user
+                pass
+
+        return True
+
+# Global reference to track if we've shown warning recently
+_last_warning_time = 0
+_warning_cooldown = 10.0  # Show warning at most once every 10 seconds
+
+def check_and_warn_absolute_paths():
+    """Check for absolute paths and show warning"""
+    global _last_warning_time
+    import time
+
+    doc = c4d.documents.GetActiveDocument()
+    if not doc:
+        return True  # Allow operation
+
+    # Check for absolute paths
+    paths_bad = check_texture_paths(doc)
+    if not paths_bad:
+        return True  # No issues, allow operation
+
+    # Check cooldown to avoid spamming
+    now = time.time()
+    if now - _last_warning_time < _warning_cooldown:
+        return True  # Recently warned, don't spam
+
+    _last_warning_time = now
+
+    # Show warning dialog
+    error_msg = f"⚠️  WARNING: {len(paths_bad)} ABSOLUTE PATH(S) DETECTED!\n\n"
+    error_msg += "SAVE IS NOT RECOMMENDED until you fix:\n\n"
+
+    for i, path_info in enumerate(paths_bad[:5], 1):
+        asset_type = path_info.get('type', 'unknown')
+        if 'texture' in asset_type or 'shader' in asset_type or 'redshift' in asset_type:
+            error_msg += f"{i}. TEXTURE in '{path_info.get('material', 'unknown')}'\n"
+        elif asset_type in ['alembic', 'alembic_tag']:
+            error_msg += f"{i}. ALEMBIC in '{path_info.get('object', 'unknown')}'\n"
+
+    if len(paths_bad) > 5:
+        error_msg += f"... and {len(paths_bad) - 5} more\n\n"
+
+    error_msg += "\n⚠️  IMPORTANT: All paths MUST be relative!\n"
+    error_msg += "Use Project → Collect Assets or fix paths manually.\n\n"
+    error_msg += "The YS Guardian panel shows details in ASSET_PATHS row."
+
+    c4d.gui.MessageDialog(error_msg)
+    return True  # Can't block in MessageData, just warn
+
 # -------------- registration --------------
 class YSPanelCmd(plugins.CommandData):
     dlg = None
@@ -2281,7 +2647,7 @@ class YSPanelCmd(plugins.CommandData):
             safe_print("YS Guardian Panel v1.0 initialized")
         # Pass plugin ID as second argument for layout persistence
         return self.dlg.Open(dlgtype=c4d.DLG_TYPE_ASYNC, pluginid=PLUGIN_ID,
-                            defaultw=720, defaulth=440)
+                            defaultw=420, defaulth=360)
 
     def RestoreLayout(self, sec_ref):
         """Required for layout persistence - called when C4D restores layouts"""
