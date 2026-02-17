@@ -33,7 +33,7 @@ except ImportError as e:
 
 # Plugin ID - change if ID collision
 PLUGIN_ID = 2099069
-PLUGIN_NAME = "YS Guardian v1.0.2"
+PLUGIN_NAME = "YS Guardian v1.0.3"
 
 # Preset names - normalized to lowercase with underscores
 # The system accepts both "pre_render" and "pre-render" (case-insensitive)
@@ -1029,6 +1029,7 @@ class G:
     BTN_CAM_SIMPLE = 1123  # Simple camera setup
     BTN_CAM_SHAKEL = 1124  # Shakel camera setup
     BTN_CAM_PATH = 1125  # Path camera setup
+    BTN_CREATE_HIERARCHY = 1126  # Create Hierarchy from nulls.c4d
     BTN_PLACEHOLDER = 1109  # Fourth button placeholder
 
     # Render preset tab buttons (legacy - kept for compatibility)
@@ -1306,6 +1307,7 @@ class YSPanel(gui.GeDialog):
         # Quick Actions - condensed single row
         self.AddSeparatorH(12)
         self.GroupBegin(50, c4d.BFH_SCALEFIT, 8, 0)
+        self.AddButton(G.BTN_CREATE_HIERARCHY,c4d.BFH_SCALEFIT,0,0,"Hier")
         self.AddButton(G.BTN_A,c4d.BFH_SCALEFIT,0,0,"H→L")
         self.AddButton(G.BTN_B,c4d.BFH_SCALEFIT,0,0,"Solo")
         self.AddButton(G.BTN_VIBRATE_NULL,c4d.BFH_SCALEFIT,0,0,"Vib")
@@ -1313,7 +1315,6 @@ class YSPanel(gui.GeDialog):
         self.AddButton(G.BTN_ABC_RETIME, c4d.BFH_SCALEFIT, 0, 0, "ABC")
         self.AddButton(G.BTN_CAM_SIMPLE,c4d.BFH_SCALEFIT,0,0,"Cam1")
         self.AddButton(G.BTN_CAM_SHAKEL,c4d.BFH_SCALEFIT,0,0,"Cam2")
-        self.AddButton(G.BTN_CAM_PATH,c4d.BFH_SCALEFIT,0,0,"Cam3")
         self.GroupEnd()
 
         # Utilities - Stills, GitHub, Bug Report (condensed single row)
@@ -1376,10 +1377,6 @@ class YSPanel(gui.GeDialog):
         # Always perform live updates (monitoring always active)
         self._refresh()
 
-        # Check for absolute paths and warn user periodically
-        if doc and hasattr(self, '_paths_bad') and self._paths_bad:
-            check_and_warn_absolute_paths()
-
     def Command(self, cid, msg):
         doc = c4d.documents.GetActiveDocument()
         if not doc:
@@ -1430,6 +1427,9 @@ class YSPanel(gui.GeDialog):
 
         elif cid == G.BTN_CAM_PATH:
             self._merge_camera_file(doc, "cam_path.c4d")
+
+        elif cid == G.BTN_CREATE_HIERARCHY:
+            self._create_hierarchy(doc)
 
         elif cid == G.BTN_DROP_TO_FLOOR:
             self._drop_to_floor(doc)
@@ -1592,6 +1592,33 @@ class YSPanel(gui.GeDialog):
         except Exception as e:
             safe_print(f"Error merging vibrate null: {e}")
             c4d.gui.MessageDialog(f"Error loading vibrate null: {e}")
+
+    def _create_hierarchy(self, doc):
+        """Merge hierarchy nulls from nulls.c4d"""
+        if not doc:
+            return
+
+        try:
+            plugin_dir = os.path.dirname(__file__)
+            c4d_file = os.path.join(plugin_dir, "c4d", "nulls.c4d")
+
+            if not os.path.exists(c4d_file):
+                safe_print(f"nulls.c4d not found at: {c4d_file}")
+                c4d.gui.MessageDialog("nulls.c4d file not found in c4d folder")
+                return
+
+            merge_doc = c4d.documents.MergeDocument(doc, c4d_file, c4d.SCENEFILTER_OBJECTS | c4d.SCENEFILTER_MATERIALS)
+
+            if merge_doc:
+                c4d.EventAdd()
+                safe_print("Merged hierarchy nulls from nulls.c4d")
+            else:
+                safe_print("Failed to merge nulls.c4d")
+                c4d.gui.MessageDialog("Failed to merge nulls.c4d")
+
+        except Exception as e:
+            safe_print(f"Error creating hierarchy: {e}")
+            c4d.gui.MessageDialog(f"Error creating hierarchy: {e}")
 
     def _merge_camera_file(self, doc, filename):
         """Merge camera setup from C4D file"""
@@ -2574,69 +2601,6 @@ def _select_objects(doc, objs):
 
     c4d.EventAdd()
 
-# -------------- Save Blocker Message Plugin --------------
-class SaveBlockerMessage(plugins.MessageData):
-    """Intercepts save messages to block saves when absolute paths exist"""
-
-    def CoreMessage(self, id, msg):
-        """Handle core messages"""
-        # Check for document save attempts
-        if id == c4d.EVMSG_CHANGE:
-            # This fires before many document operations
-            doc = c4d.documents.GetActiveDocument()
-            if doc and doc.GetChanged():
-                # Check if this is a save operation
-                # We'll check periodically and warn the user
-                pass
-
-        return True
-
-# Global reference to track if we've shown warning recently
-_last_warning_time = 0
-_warning_cooldown = 10.0  # Show warning at most once every 10 seconds
-
-def check_and_warn_absolute_paths():
-    """Check for absolute paths and show warning"""
-    global _last_warning_time
-    import time
-
-    doc = c4d.documents.GetActiveDocument()
-    if not doc:
-        return True  # Allow operation
-
-    # Check for absolute paths
-    paths_bad = check_texture_paths(doc)
-    if not paths_bad:
-        return True  # No issues, allow operation
-
-    # Check cooldown to avoid spamming
-    now = time.time()
-    if now - _last_warning_time < _warning_cooldown:
-        return True  # Recently warned, don't spam
-
-    _last_warning_time = now
-
-    # Show warning dialog
-    error_msg = f"⚠️  WARNING: {len(paths_bad)} ABSOLUTE PATH(S) DETECTED!\n\n"
-    error_msg += "SAVE IS NOT RECOMMENDED until you fix:\n\n"
-
-    for i, path_info in enumerate(paths_bad[:5], 1):
-        asset_type = path_info.get('type', 'unknown')
-        if 'texture' in asset_type or 'shader' in asset_type or 'redshift' in asset_type:
-            error_msg += f"{i}. TEXTURE in '{path_info.get('material', 'unknown')}'\n"
-        elif asset_type in ['alembic', 'alembic_tag']:
-            error_msg += f"{i}. ALEMBIC in '{path_info.get('object', 'unknown')}'\n"
-
-    if len(paths_bad) > 5:
-        error_msg += f"... and {len(paths_bad) - 5} more\n\n"
-
-    error_msg += "\n⚠️  IMPORTANT: All paths MUST be relative!\n"
-    error_msg += "Use Project → Collect Assets or fix paths manually.\n\n"
-    error_msg += "The YS Guardian panel shows details in ASSET_PATHS row."
-
-    c4d.gui.MessageDialog(error_msg)
-    return True  # Can't block in MessageData, just warn
-
 # -------------- registration --------------
 class YSPanelCmd(plugins.CommandData):
     dlg = None
@@ -2689,7 +2653,7 @@ def Register():
         dat=YSPanelCmd()
     )
     if ok:
-        safe_print("Guardian panel v1.0.1 registered successfully")
+        safe_print("Guardian panel v1.0.3 registered successfully")
     else:
         safe_print("Failed to register Guardian panel")
     return ok
@@ -2697,7 +2661,7 @@ def Register():
 if __name__ == "__main__":
     # Print setup info using safe_print to avoid None returns in console
     safe_print("\n" + "="*50)
-    safe_print("YS Guardian Panel v1.0.1 - Complete Edition")
+    safe_print("YS Guardian Panel v1.0.3 - Complete Edition")
     safe_print("="*50)
 
     if SNAPSHOT_AVAILABLE and EXR_CONVERTER_AVAILABLE:

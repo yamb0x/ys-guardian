@@ -1,4 +1,4 @@
-# YS Guardian v1.0.2
+# YS Guardian v1.0.3
 
 Quality control and workflow automation plugin for Cinema 4D production environments — built for Yambo Studio & Friends.
 
@@ -65,11 +65,8 @@ Quick access to the excellent Alembic retime tool by **Austin Marola** (@zonedog
 
 ### Quick Tools
 
-**GPT Integration**
-Injects system prompt directly into ChatGPT to generate Python scripts for C4D. Opens browser with pre-configured prompt.
-
-**3Dsky Search**
-Search models from C4D instantly. Opens browser with your search query on 3dsky.com.
+**Create Hierarchy**
+Merges a pre-configured null hierarchy template into the scene. Sets up a clean organizational structure for production scenes in one click.
 
 ### Grab Stills
 
@@ -162,8 +159,7 @@ Click **Select** buttons to isolate problematic objects for quick correction.
 
 ### Quick Actions
 
-- **Search 3D Model**: Opens 3dsky.com with search query
-- **Ask ChatGPT**: Generates Python script prompt with system context
+- **Create Hierarchy**: Merges null hierarchy template into scene
 - **Vibrate Null**: Merges vibration null into scene
 - **Drop to Floor**: Snaps selected objects to Y=0
 - **ABC Retime**: Applies Alembic Retime tag to selected cache objects
@@ -234,6 +230,13 @@ The snapshot system uses external Python with Pillow for color-accurate conversi
 - Ensure abc_retime plugin is installed in Cinema 4D plugins folder
 
 ## Changelog
+
+### v1.0.3 | 16.02.2026
+
+**Changes**:
+- **Added Create Hierarchy button** - One-click merge of pre-configured null hierarchy template into scene for quick project setup
+- **Removed absolute path popup warning** - The periodic warning dialog that interrupted workflow has been removed. Absolute path status is still shown passively in the panel's ASSET_PATHS row
+- **Removed Cam3 (Path) button** - Replaced by Create Hierarchy
 
 ### v1.0.2 | 09.11.2025
 

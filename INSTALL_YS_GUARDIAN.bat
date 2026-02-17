@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion EnableExtensions
 
-REM YS Guardian Professional Installer v1.0.2
+REM YS Guardian Professional Installer v1.0.3
 REM This installer must be run as Administrator
 
 REM Keep window open after execution
@@ -14,7 +14,7 @@ REM =========================================================
 REM INITIALIZATION
 REM =========================================================
 
-set "VERSION=1.0.2"
+set "VERSION=1.0.3"
 set "INSTALL_DIR=%~dp0"
 set "LOG_FILE=%TEMP%\ys_guardian_install.log"
 set "PLUGIN_DIR=%INSTALL_DIR%plugin"
@@ -227,6 +227,17 @@ if exist "%C4D_DIR%\cam_path.c4d" (
     )
 ) else (
     echo [WARNING] cam_path.c4d not found (optional)
+)
+
+if exist "%C4D_DIR%\nulls.c4d" (
+    copy /Y "%C4D_DIR%\nulls.c4d" "%DEST_DIR%\c4d\" >nul 2>&1
+    if !errorlevel! equ 0 (
+        echo [OK] nulls.c4d hierarchy template
+    ) else (
+        echo [WARNING] Could not copy nulls.c4d
+    )
+) else (
+    echo [WARNING] nulls.c4d not found (optional)
 )
 
 if exist "%C4D_DIR%\new.c4d" (
