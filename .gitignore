@@ -35,3 +35,6 @@ YS_Guardian_Output/
 temp/
 tmp/
 cache/
+
+# C4D backups
+c4d/backup/

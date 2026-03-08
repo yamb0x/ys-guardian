@@ -33,7 +33,7 @@ except ImportError as e:
 
 # Plugin ID - change if ID collision
 PLUGIN_ID = 2099069
-PLUGIN_NAME = "YS Guardian v1.0.3"
+PLUGIN_NAME = "YS Guardian v1.0.4"
 
 # Preset names - normalized to lowercase with underscores
 # The system accepts both "pre_render" and "pre-render" (case-insensitive)
@@ -2653,7 +2653,7 @@ def Register():
         dat=YSPanelCmd()
     )
     if ok:
-        safe_print("Guardian panel v1.0.3 registered successfully")
+        safe_print("Guardian panel v1.0.4 registered successfully")
     else:
         safe_print("Failed to register Guardian panel")
     return ok
@@ -2661,7 +2661,7 @@ def Register():
 if __name__ == "__main__":
     # Print setup info using safe_print to avoid None returns in console
     safe_print("\n" + "="*50)
-    safe_print("YS Guardian Panel v1.0.3 - Complete Edition")
+    safe_print("YS Guardian Panel v1.0.4 - Complete Edition")
     safe_print("="*50)
 
     if SNAPSHOT_AVAILABLE and EXR_CONVERTER_AVAILABLE:
